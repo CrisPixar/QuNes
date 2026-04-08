@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String   @id @default(uuid())
+  username         String   @unique
+  passwordHash     String?  // Dilithium is used for auth, but we might store a seed or derivative
+  dilithiumPubKey  String   @map("dilithium_pub_key")
+  kyberPubKey      String   @map("kyber_pub_key")
+  
+  // Profile Customization
+  avatarUrl        String?  @map("avatar_url")
+  customAccent     String   @default("#00E5FF") @map("custom_accent")
+  customBackground String?  @map("custom_background")
+  
+  // Privacy Settings
+  ghostMode        Boolean  @default(false) @map("ghost_mode")
+  hideLastSeen     Boolean  @default(false) @map("hide_last_seen")
+  hideProfilePhoto Boolean  @default(false) @map("hide_profile_photo")
+
+  messages         Message[]
+  chats            ChatParticipant[]
+  sessions         Session[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Chat {
+  id           String            @id @default(uuid())
+  isGroup      Boolean           @default(false) @map("is_group")
+  name         String?           @map("group_name")
+  participants ChatParticipant[]
+  messages     Message[]
+  createdAt    DateTime          @default(now())
+}
+
+model ChatParticipant {
+  userId String
+  chatId String
+  user   User   @relation(fields: [userId], references: [id])
+  chat   Chat   @relation(fields: [chatId], references: [id])
+  @@id([userId, chatId])
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  chatId    String
+  chat      Chat     @relation(fields: [chatId], references: [id])
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id])
+  payload   String   @db.Text // Quantum encrypted payload
+  signature String   // Dilithium signature
+  iv        String   // Encryption nonce
+  type      String   @default("text") // text, image, audio, call_signal
+  createdAt DateTime @default(now())
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  token     String   @unique
+  socketId  String?  @map("socket_id")
+  expiresAt DateTime
+}

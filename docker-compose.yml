@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alphine
+    container_name: qunes-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-qunes_admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secure_db_pass}
+      POSTGRES_DB: ${DB_NAME:-qunes_main}
+    volumes:
+      - qunes_pg_data:/var/lib/postgresql/data
+    networks:
+      - qunes_network
+
+  cache:
+    image: redis:7-alpine
+    container_name: qunes-redis
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - qunes_redis_data:/data
+    networks:
+      - qunes_network
+
+  msg-server:
+    build:
+      context: ./qunes-msg-server
+      dockerfile: Dockerfile
+    container_name: qunes-msg-server
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://qunes_admin:secure_db_pass@db:5432/qunes_main?schema=public
+      - REDIS_URL=redis://cache:6379
+      - ADMIN_USERNAME=Whitekiller
+      - ADMIN_PASSWORD=VtL5y05HIq9I
+      - JWT_SECRET=${JWT_SECRET:-quantum_unbreakable_secret_2024}
+    ports:
+      - "3000:3000"
+      - "3001:3001" # Для Admin Web UI
+    depends_on:
+      - db
+      - cache
+    networks:
+      - qunes_network
+
+  media-server:
+    build:
+      context: ./qunes-server-media
+      dockerfile: Dockerfile
+    container_name: qunes-media-server
+    restart: always
+    privileged: true
+    network_mode: "host" # Важно для WebRTC (Mediasoup) для минимизации задержек и NAT traversal
+    environment:
+      - MEDIASOUP_LISTEN_IP=0.0.0.0
+      - MEDIASOUP_ANNOUNCED_IP=${EXTERNAL_IP:-127.0.0.1}
+      - MSG_SERVER_URL=http://localhost:3000
+    depends_on:
+      - msg-server
+
+networks:
+  qunes_network:
+    driver: bridge
+
+volumes:
+  qunes_pg_data:
+  qunes_redis_data:

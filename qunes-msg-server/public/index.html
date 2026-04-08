@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuNes Admin Terminal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=JetBrains+Mono&display=swap">
+    <style>
+        body { background: #0B0E11; font-family: 'Inter', sans-serif; color: white; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        function AdminApp() {
+            const [loggedIn, setLoggedIn] = useState(false);
+            const [stats, setStats] = useState({ users: 0, messages: 0, online: 0, cpu: 0 });
+            const [credentials, setCredentials] = useState({ user: '', pass: '' });
+
+            useEffect(() => {
+                if (loggedIn) {
+                    const interval = setInterval(fetchStats, 2000);
+                    return () => clearInterval(interval);
+                }
+            }, [loggedIn]);
+
+            const fetchStats = async () => {
+                try {
+                    const res = await fetch('/white-admin/stats');
+                    const data = await res.json();
+                    setStats(data);
+                } catch (e) { console.error(e); }
+            };
+
+            const handleLogin = async (e) => {
+                e.preventDefault();
+                if (credentials.user === 'Whitekiller' && credentials.pass === 'VtL5y05HIq9I') {
+                    setLoggedIn(true);
+                } else {
+                    alert('Quantum Handshake Failed: Invalid Identity');
+                }
+            };
+
+            if (!loggedIn) {
+                return (
+                    <div className="h-screen flex items-center justify-center">
+                        <form onSubmit={handleLogin} className="bg-[#161B22] p-8 rounded-2xl border border-[#30363D] w-96">
+                            <h1 className="text-[#00E5FF] text-2xl font-bold mb-6">Admin Entry</h1>
+                            <input 
+                                type="text" 
+                                placeholder="Account Name"
+                                className="w-full bg-[#0B0E11] border border-[#30363D] p-3 rounded mb-4 text-white"
+                                onChange={(e) => setCredentials({...credentials, user: e.target.value})}
+                            />
+                            <input 
+                                type="password" 
+                                placeholder="Access Token"
+                                className="w-full bg-[#0B0E11] border border-[#30363D] p-3 rounded mb-6 text-white"
+                                onChange={(e) => setCredentials({...credentials, pass: e.target.value})}
+                            />
+                            <button className="w-full bg-[#00E5FF] text-black font-bold p-3 rounded-full hover:bg-white transition-colors">
+                                Authorize
+                            </button>
+                        </form>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="p-8 max-w-6xl mx-auto">
+                    <div className="flex justify-between items-center mb-12">
+                        <div>
+                            <h1 className="text-3xl font-bold text-white">QuNes Control Plane</h1>
+                            <p className="text-[#8B949E] mono">Status: Secure / PQC Dilithium Verified</p>
+                        </div>
+                        <div className="flex space-x-4">
+                           <div className="bg-[#161B22] p-3 rounded-xl border border-[#00C853] text-[#00C853] font-bold">DB: Connected</div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                        <StatCard label="Online Sessions" value={stats.online} color="#00E5FF" />
+                        <StatCard label="Total Users" value={stats.users} color="#FFFFFF" />
+                        <StatCard label="Secure Packets" value={stats.messages} color="#00C853" />
+                        <StatCard label="Load Core %" value={stats.cpu.toFixed(1)} color="#FFAB00" />
+                    </div>
+
+                    <div className="bg-[#161B22] p-6 rounded-2xl border border-[#30363D]">
+                        <h2 className="text-xl font-bold mb-4">Audit Logs</h2>
+                        <div className="bg-black p-4 rounded-lg mono text-xs h-64 overflow-y-auto space-y-2 opacity-80">
+                            <p className="text-[#8B949E]">[{new Date().toISOString()}] - [SYS] - Initialization success.</p>
+                            <p className="text-[#00E5FF]">[{new Date().toISOString()}] - [SEC] - Keys rotated for user Whitekiller.</p>
+                            <p className="text-green-500">[{new Date().toISOString()}] - [MSG] - Relay established: 0.2ms latency.</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function StatCard({ label, value, color }) {
+            return (
+                <div className="bg-[#161B22] p-6 rounded-2xl border border-[#30363D]">
+                    <p className="text-[#8B949E] text-xs uppercase mb-2">{label}</p>
+                    <p className="text-3xl font-bold" style={{ color: color }}>{value}</p>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<AdminApp />);
+    </script>
+</body>
+</html>

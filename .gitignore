@@ -1,0 +1,30 @@
+# IDE and System
+.idea/
+.vscode/
+*.swp
+*.log
+.DS_Store
+
+# Node.js
+node_modules/
+dist/
+build/
+npm-debug.log*
+.env
+
+# Android
+.gradle/
+local.properties
+.navigation/
+captures/
+*.apk
+*.aar
+*.keystore
+!debug.keystore
+
+# Databases and containers
+postgres_data/
+redis_data/
+
+# OS/System files
+.history/

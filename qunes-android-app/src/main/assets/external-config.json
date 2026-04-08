@@ -1,0 +1,18 @@
+{
+  "server_url": "https://qunes-msg.quarknet.io:3000",
+  "media_server_url": "https://qunes-media.quarknet.io:4000",
+  "turn_servers": [
+    { "urls": "turn:turn.quarknet.io:3478", "username": "qunes_user", "credential": "quantum_pass_2024" }
+  ],
+  "pqc": {
+    "kem_algorithm": "Kyber-1024",
+    "sig_algorithm": "Dilithium-3",
+    "rotation_interval": 50,
+    "fallback_rsa": true
+  },
+  "privacy_defaults": {
+    "ghost_mode": false,
+    "hide_last_seen": false,
+    "secret_read": true
+  }
+}
