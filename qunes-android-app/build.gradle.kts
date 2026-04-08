@@ -50,7 +50,7 @@ android {
 
 dependencies {
     implementation(project(":qunes-core-crypto"))
-    implementation(libs.anthro-core-ktx)
+    implementation(libs.anthro.coreKtx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
@@ -65,7 +65,7 @@ dependencies {
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
     implementation(libs.sqlcipher)
-    implementation(libs.socket.io-client)
+    implementation(libs.socketIoClient)
     implementation(libs.google.webrtc)
     implementation(libs.coil.compose)
     implementation(libs.androidx.datastore.preferences)

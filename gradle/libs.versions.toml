@@ -20,7 +20,7 @@ biometric = "1.1.0"
 paging = "3.2.1"
 
 [libraries]
-anthro-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+anthro-coreKtx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
@@ -37,7 +37,7 @@ room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 sqlcipher = { group = "net.zetetic", name = "android-database-sqlcipher", version.ref = "sqlcipher" }
 coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
-socket-io-client = { group = "io.socket", name = "socket.io-client", version.ref = "socketIo" }
+socketIoClient = { group = "io.socket", name = "socket.io-client", version.ref = "socketIo" }
 google-webrtc = { group = "com.github.webrtc-sdk", name = "android", version.ref = "webrtc" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }

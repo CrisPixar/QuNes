@@ -3,8 +3,7 @@ import fastifyStatic from '@fastify/static';
 import { Server } from 'socket.io';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { adminRoutes } from './routes/admin.js';
-import { setupSocket } from './services/socket.js';
+import adminRoutes from './routes/admin.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
