@@ -23,12 +23,12 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Debug APK
-        run: ./gradlew :qunes-android-app:assembleDebug --no-daemon --info 2>&1 | head -100
+        run: ./gradlew :qunes-android-app:assembleDebug --no-daemon
 
       - uses: actions/upload-artifact@v4
         with:
           name: qunes-debug-apk
-          path: **/build/outputs/apk/debug/*.apk
+          path: qunes-android-app/build/outputs/apk/debug/*.apk
           retention-days: 30
 
   build-servers:
