@@ -49,6 +49,7 @@ android {
 }
 
 dependencies {
+    implementation("androidx.room:room-paging:2.6.1")
     implementation(project(":qunes-core-crypto"))
     implementation(libs.anthro.coreKtx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -76,4 +77,3 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     debugImplementation(libs.androidx.ui.tooling)
 }
-    implementation("androidx.room:room-paging:2.6.1")
