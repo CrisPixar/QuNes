@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.QuNes" parent="android:Theme"/>
+    <style name="Theme.QuNes.NoActionBar" parent="android:Theme"/>
+</resources>
