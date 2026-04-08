@@ -1,4 +1,4 @@
-import { RtpCodecCapability } from 'mediasoup';
+import type { RtpCodecCapability } from 'mediasoup/node/lib/types';
 
 export const config = {
   listenIp: process.env.MEDIASOUP_LISTEN_IP || '0.0.0.0',
