@@ -10,13 +10,4 @@
 1. Скорректируйте параметры в `.env`.
 2. Запустите стек:
    ```bash
-   docker-compose up -d --build
-   ```
-
-## Админ-панель
-- **URL:** `http://localhost:3001/white-admin`
-- **Login:** Whitekiller
-- **Password:** VtL5y05HIq9I
-
-## Безопасность
-Проект использует постквантовые алгоритмы Kyber-1024 и Dilithium-3. Все медиа-потоки защищены E2EE через механизм Insertable Streams.
+   docker-compose up -d --buildАдмин-панельURL: http://localhost:3001/white-adminДоступ только для авторизованных администраторов.БезопасностьПроект использует постквантовые алгоритмы Kyber-1024 и Dilithium-3. Все медиа-потоки защищены E2EE через механизм Insertable Streams.
