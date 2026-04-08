@@ -28,7 +28,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: qunes-debug-apk
-          path: qunes-android-app/build/outputs/apk/debug/*.apk
+          path: **/build/outputs/apk/debug/*.apk
           retention-days: 30
 
   build-servers:
