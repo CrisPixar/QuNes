@@ -23,7 +23,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Debug APK
-        run: ./gradlew :qunes-android-app:assembleDebug --no-daemon --stacktrace
+        run: ./gradlew :qunes-android-app:assembleDebug --no-daemon --info 2>&1 | head -100
 
       - uses: actions/upload-artifact@v4
         with:
