@@ -1,4 +1,4 @@
-import type { RtpCodecCapability } from 'mediasoup/node/lib/RtpParameters';
+import type { types } from 'mediasoup';
 
 export const config = {
   listenIp: process.env.MEDIASOUP_LISTEN_IP || '0.0.0.0',
@@ -31,7 +31,7 @@ export const config = {
             'pqc-mode': 'enforced'
           }
         }
-      ] as RtpCodecCapability[]
+      ] as types.RtpCodecCapability[]
     }
   }
 };
