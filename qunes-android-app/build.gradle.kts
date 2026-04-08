@@ -75,4 +75,5 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     debugImplementation(libs.androidx.ui.tooling)
-}implementation("androidx.room:room-paging:2.6.1")
+}
+    implementation("androidx.room:room-paging:2.6.1")
