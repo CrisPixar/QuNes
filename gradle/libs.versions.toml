@@ -12,7 +12,7 @@ room = "2.6.1"
 ksp = "1.9.22-1.0.17"
 coroutines = "1.7.3"
 socketIo = "2.1.0"
-webrtc = "1.0.32006"
+webrtc = "125.6422.07"
 coil = "2.5.0"
 sqlcipher = "4.5.4"
 datastore = "1.0.0"
@@ -38,7 +38,7 @@ room-compiler = { group = "androidx.room", name = "room-compiler", version.ref =
 sqlcipher = { group = "net.zetetic", name = "android-database-sqlcipher", version.ref = "sqlcipher" }
 coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 socketIoClient = { group = "io.socket", name = "socket.io-client", version.ref = "socketIo" }
-google-webrtc = { group = "com.github.webrtc-sdk", name = "android", version.ref = "webrtc" }
+google-webrtc = { group = "io.github.webrtc-sdk", name = "android", version.ref = "webrtc" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
