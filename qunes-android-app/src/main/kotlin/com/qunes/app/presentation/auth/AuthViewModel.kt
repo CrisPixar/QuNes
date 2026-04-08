@@ -1,8 +1,8 @@
 package com.qunes.app.presentation.auth
 
 import androidx.lifecycle.ViewModel
-import com.qunes.app.domain.security.CryptoFallbackManager
 import androidx.lifecycle.viewModelScope
+import com.qunes.app.domain.security.CryptoFallbackManager
 import com.qunes.core.crypto.NativePQC
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -11,10 +11,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+@HiltViewModel
 class AuthViewModel @Inject constructor(
     private val fallbackManager: CryptoFallbackManager
 ) : ViewModel() {
-class AuthViewModel @Inject constructor() : ViewModel() {
 
     data class AuthState(
         val isGeneratingKeys: Boolean = false,
@@ -30,9 +30,8 @@ class AuthViewModel @Inject constructor() : ViewModel() {
     fun startIdentityGenesis() {
         viewModelScope.launch {
             _state.value = _state.value.copy(isGeneratingKeys = true, error = null)
-            
+
             try {
-                // Simulation of Quantum Key Generation steps
                 if (fallbackManager.isPqcSupported()) {
                     updateStatus("CRYSTALS-KYBER ENGINE BOOT", 0.3f)
                     NativePQC.generateKyberKeys()
@@ -40,21 +39,28 @@ class AuthViewModel @Inject constructor() : ViewModel() {
                     updateStatus("HARDWARE INCOMPATIBLE - RSA FALLBACK", 0.3f)
                     fallbackManager.generateRsaKeyPair()
                 }
+
                 delay(1200)
-                
                 updateStatus("IDENTITY AUTH SETUP", 0.6f)
+
                 delay(1200)
-                
-                updateStatus("CRYSTALS-DILITHIUM AUTH SETUP", 0.6f)
-                // In reality, keys would be saved to secure storage here
+                updateStatus("CRYSTALS-DILITHIUM AUTH SETUP", 0.8f)
+
                 delay(1000)
-                
                 updateStatus("STABILIZING QUANTUM CHANNEL", 0.9f)
+
                 delay(500)
-                
-                _state.value = _state.value.copy(isGeneratingKeys = false, progress = 1.0f, authorized = true)
+                _state.value = _state.value.copy(
+                    isGeneratingKeys = false,
+                    progress = 1.0f,
+                    authorized = true
+                )
+
             } catch (e: Exception) {
-                _state.value = _state.value.copy(isGeneratingKeys = false, error = "GENESIS_FAILED: ${e.message}")
+                _state.value = _state.value.copy(
+                    isGeneratingKeys = false,
+                    error = "GENESIS_FAILED: ${e.message}"
+                )
             }
         }
     }
