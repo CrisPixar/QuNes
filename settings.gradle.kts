@@ -1,5 +1,20 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") }
+    }
+}
+
 rootProject.name = "QuNes"
 include(":qunes-android-app")
 include(":qunes-core-crypto")
-include(":qunes-msg-server")
-include(":qunes-server-media")
