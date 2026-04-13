@@ -61,8 +61,17 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug
 
+      - name: Check if release signing is possible
+        id: check_secrets
+        run: |
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "can_sign=true" >> $GITHUB_OUTPUT
+          else
+            echo "can_sign=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build Release APK
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        if: steps.check_secrets.outputs.can_sign == 'true'
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEY_ALIAS:       ${{ secrets.KEY_ALIAS }}
@@ -80,7 +89,7 @@ jobs:
           retention-days: 7
 
       - name: Upload Release APK
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        if: steps.check_secrets.outputs.can_sign == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: qns-release-apk
@@ -110,10 +119,19 @@ jobs:
       - name: Archive server
         run: cd dist && zip -r qns-server-${{ github.ref_name }}.zip server/
 
+      - name: Find release APK
+        id: find_apk
+        run: |
+          if [ -f dist/app-release.apk ]; then
+            echo "apk_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "apk_exists=false" >> $GITHUB_OUTPUT
+          fi
+
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: "QNS ${{ github.ref_name }}"
           files: |
-            dist/app-release.apk
+            ${{ steps.find_apk.outputs.apk_exists == 'true' && 'dist/app-release.apk' || '' }}
             dist/qns-server-${{ github.ref_name }}.zip
