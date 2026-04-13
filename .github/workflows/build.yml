@@ -9,31 +9,25 @@ on:
     tags: [ 'v*' ]
 
 jobs:
-  # ── 1. Server ─────────────────────────────────────────────────
   build-server:
     name: "Server: typecheck + test"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: oven-sh/setup-bun@v2
         with: { bun-version: latest }
-
       - name: Install dependencies
         working-directory: server
         run: bun install --frozen-lockfile
-
       - name: TypeScript check
         working-directory: server
         run: bun run typecheck
-
       - name: Unit tests
         working-directory: server
         env:
-          JWT_SECRET_SEED: ${{ secrets.JWT_SECRET_SEED || '0000000000000000000000000000000000000000000000000000000000000001' }}
+          JWT_SECRET_SEED: ${{ secrets.JWT_SECRET_SEED || '0000000000000000000000000000000000000000000000000000000000000001' } Barbarian
           ADMIN_PASSWORD:  "TestAdmin123!"
         run: bun test
-
       - name: Upload server artifact
         uses: actions/upload-artifact@v4
         with:
@@ -45,18 +39,15 @@ jobs:
             server/tsconfig.json
           retention-days: 7
 
-  # ── 2. Android ────────────────────────────────────────────────
   build-android:
     name: "Android: assemble APK"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-java@v4
         with: { java-version: '17', distribution: 'temurin' }
-
       - uses: gradle/actions/setup-gradle@v3
-        with: { cache-encryption-key: '${{ secrets.GRADLE_CACHE_KEY }}' }
+        with: { cache-encryption-key: '${{ secrets.GRADLE_CACHE_KEY || 'default_cache_key' }}' }
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug
@@ -80,14 +71,13 @@ jobs:
           retention-days: 7
 
       - name: Upload Release APK
-        if: ${{ env.KEYSTORE_BASE64 != '' }}
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: qns-release-apk
           path: app/build/outputs/apk/release/app-release.apk
           retention-days: 30
 
-  # ── 3. GitHub Release (только тег v*) ─────────────────────────
   release:
     name: "Create GitHub Release"
     needs: [ build-server, build-android ]
@@ -96,33 +86,16 @@ jobs:
     permissions: { contents: write }
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/download-artifact@v4
         with: { name: qns-release-apk, path: ./dist/ }
-
       - uses: actions/download-artifact@v4
         with: { name: qns-server, path: ./dist/server/ }
-
       - name: Archive server
         run: cd dist && zip -r qns-server-${{ github.ref_name }}.zip server/
-
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name:   ${{ github.ref_name }}
-          name:       "QNS ${{ github.ref_name }}"
-          body: |
-            ## QNS — Quantum Secure Messenger ${{ github.ref_name }}
-
-            ### Шифрование
-            `ML-KEM-1024` + `ML-DSA-87` + `X25519` + `Ed25519` + `Double Ratchet` + `X3DH`
-
-            ### Установка сервера
-            ```bash
-            unzip qns-server-${{ github.ref_name }}.zip && cd server
-            bun install
-            ADMIN_PASSWORD=StrongPass123! bun run scripts/create-admin.ts
-            JWT_SECRET_SEED=$(openssl rand -hex 32) bun run start
-            ```
+          tag_name: ${{ github.ref_name }}
+          name: "QNS ${{ github.ref_name }}"
           files: |
             dist/app-release.apk
             dist/qns-server-${{ github.ref_name }}.zip
