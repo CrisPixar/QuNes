@@ -3,10 +3,10 @@ name: QNS CI/CD
 on:
   push:
     branches: [ main ]
+    tags:
+      - 'v*'
   pull_request:
     branches: [ main ]
-  create:
-    tags: [ 'v*' ]
 
 jobs:
   build-server:
@@ -15,19 +15,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
-        with: { bun-version: latest }
+        with:
+          bun-version: latest
+
       - name: Install dependencies
         working-directory: server
         run: bun install --frozen-lockfile
+
       - name: TypeScript check
         working-directory: server
         run: bun run typecheck
+
       - name: Unit tests
         working-directory: server
         env:
-          JWT_SECRET_SEED: ${{ secrets.JWT_SECRET_SEED || '0000000000000000000000000000000000000000000000000000000000000001' }}
-          ADMIN_PASSWORD:  "TestAdmin123!"
+          JWT_SECRET_SEED: ${{ secrets.JWT_SECRET_SEED != '' && secrets.JWT_SECRET_SEED || '0000000000000000000000000000000000000000000000000000000000000001' }}
+          ADMIN_PASSWORD: "TestAdmin123!"
         run: bun test
+
       - name: Upload server artifact
         uses: actions/upload-artifact@v4
         with:
@@ -45,9 +50,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
-        with: { java-version: '17', distribution: 'temurin' }
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
       - uses: gradle/actions/setup-gradle@v3
-        with: { cache-encryption-key: '${{ secrets.GRADLE_CACHE_KEY || 'default_cache_key' }}' }
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_CACHE_KEY || 'default_cache_key' }}
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug
@@ -83,15 +92,24 @@ jobs:
     needs: [ build-server, build-android ]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
-    permissions: { contents: write }
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
-        with: { name: qns-release-apk, path: ./dist/ }
+        with:
+          name: qns-release-apk
+          path: ./dist/
+
       - uses: actions/download-artifact@v4
-        with: { name: qns-server, path: ./dist/server/ }
+        with:
+          name: qns-server
+          path: ./dist/server/
+
       - name: Archive server
         run: cd dist && zip -r qns-server-${{ github.ref_name }}.zip server/
+
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
