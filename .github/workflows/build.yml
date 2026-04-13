@@ -25,7 +25,7 @@ jobs:
       - name: Unit tests
         working-directory: server
         env:
-          JWT_SECRET_SEED: ${{ secrets.JWT_SECRET_SEED || '0000000000000000000000000000000000000000000000000000000000000001' } Barbarian
+          JWT_SECRET_SEED: ${{ secrets.JWT_SECRET_SEED || '0000000000000000000000000000000000000000000000000000000000000001' }}
           ADMIN_PASSWORD:  "TestAdmin123!"
         run: bun test
       - name: Upload server artifact
