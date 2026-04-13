@@ -105,7 +105,7 @@ export function verifyEd25519(pk: Uint8Array, msg: Uint8Array, sig: Uint8Array):
 export function generateKemKeyPair() { return ml_kem1024.keygen(); }
 
 // ---- ML-DSA-87 (Dilithium) — сервер верифицирует подписи клиента ----
-export function generateDsaKeyPair() { return ml_dsa87.keygen(); }
+export function generateDsaKeyPair() { return ml_dsa87.keygen(new Uint8Array(32)); }
 export function verifyDsaSignature(pk: Uint8Array, msg: Uint8Array, sig: Uint8Array): boolean {
   try { return ml_dsa87.verify(pk, msg, sig); } catch { return false; }
 }
