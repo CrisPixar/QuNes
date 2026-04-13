@@ -1,0 +1,10 @@
+-keep class com.qns.**             { *; }
+-keep class org.bouncycastle.**    { *; }
+-keep class net.sqlcipher.**       { *; }
+-keep class com.google.gson.**     { *; }
+-dontwarn org.bouncycastle.**
+-dontwarn okhttp3.**
+-dontwarn retrofit2.**
+-dontwarn io.reactivex.**
+-keepattributes Signature
+-keepattributes *Annotation*

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.QNS" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.QNS.SplashScreen" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#006874</item>
+        <item name="postSplashScreenTheme">@style/Theme.QNS</item>
+    </style>
+</resources>
