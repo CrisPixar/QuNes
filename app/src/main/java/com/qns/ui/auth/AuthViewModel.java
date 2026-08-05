@@ -27,12 +27,16 @@ public class AuthViewModel extends ViewModel {
         bag.add(repo.observeRole()    .observeOn(AndroidSchedulers.mainThread()).subscribe(userRole::setValue));
     }
     public void login(String u, String p) {
+        error.setValue(null);
+        loginSuccess.setValue(false);
         isLoading.setValue(true);
         bag.add(loginUC.execute(u,p).observeOn(AndroidSchedulers.mainThread())
             .subscribe(r->{ isLoading.setValue(false); loginSuccess.setValue(true); },
                        e->{ isLoading.setValue(false); error.setValue(e.getMessage()); }));
     }
     public void register(String u, String p) {
+        error.setValue(null);
+        loginSuccess.setValue(false);
         isLoading.setValue(true);
         bag.add(regUC.execute(u,p).observeOn(AndroidSchedulers.mainThread())
             .subscribe(r->{ isLoading.setValue(false); loginSuccess.setValue(true); },

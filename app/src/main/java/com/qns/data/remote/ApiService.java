@@ -1,35 +1,93 @@
 package com.qns.data.remote;
 
-import com.qns.data.remote.model.*;
-import java.util.*;
+import com.qns.data.remote.model.AuthRequest;
+import com.qns.data.remote.model.AuthResponse;
+import com.qns.data.remote.model.MessageResponse;
+
+import java.util.List;
+import java.util.Map;
+
 import io.reactivex.rxjava3.core.Single;
-import retrofit2.http.*;
+import retrofit2.http.Body;
+import retrofit2.http.DELETE;
+import retrofit2.http.GET;
+import retrofit2.http.POST;
+import retrofit2.http.PUT;
+import retrofit2.http.Path;
+import retrofit2.http.Query;
+import retrofit2.http.Url;
 
 public interface ApiService {
-    // Auth
-    @POST("api/auth/register") Single<AuthResponse> register(@Body AuthRequest r);
-    @POST("api/auth/login")    Single<AuthResponse> login(@Body AuthRequest r);
-    @POST("api/auth/refresh")  Single<AuthResponse> refresh(@Body Map<String,String> b);
-    @DELETE("api/auth/logout") Single<Map<String,String>> logout(@Body Map<String,String> b);
-    // Keys
-    @GET("api/keys/bundle/{uid}")  Single<Map<String,Object>> getKeyBundle(@Path("uid") String uid);
-    @POST("api/keys/prekeys")      Single<Map<String,Object>> uploadPrekeys(@Body Map<String,Object> b);
-    // Users
-    @GET("api/users/search")       Single<List<Map<String,Object>>> searchUsers(@Query("q") String q);
-    @GET("api/users/{uid}")        Single<Map<String,Object>> getUser(@Path("uid") String uid);
-    // Chats
-    @GET("api/chats")              Single<List<Map<String,Object>>> getChats();
-    @POST("api/chats")             Single<Map<String,Object>> createChat(@Body Map<String,Object> b);
-    @GET("api/chats/{cid}/messages") Single<List<MessageResponse>> getMessages(
-        @Path("cid") String cid, @Query("before") Long before, @Query("limit") int limit);
-    // Admin
-    @GET("api/admin/stats")                          Single<Map<String,Object>> getAdminStats();
-    @GET("api/admin/users")                          Single<Map<String,Object>> getAdminUsers(@Query("q") String q, @Query("page") int page);
-    @GET("api/admin/users/{uid}")                    Single<Map<String,Object>> getAdminUser(@Path("uid") String uid);
-    @PUT("api/admin/users/{uid}")                    Single<Map<String,String>> updateAdminUser(@Path("uid") String uid, @Body Map<String,Object> b);
-    @DELETE("api/admin/users/{uid}")                 Single<Map<String,String>> deleteAdminUser(@Path("uid") String uid);
-    @POST("api/admin/users/{uid}/scam")              Single<Map<String,String>> setScam(@Path("uid") String uid, @Body Map<String,Object> b);
-    @DELETE("api/admin/messages/{mid}")              Single<Map<String,String>> deleteMessage(@Path("mid") String mid);
-    @DELETE("api/admin/chats/{cid}/messages")        Single<Map<String,String>> deleteAllMessages(@Path("cid") String cid);
-    @DELETE("api/admin/users/{uid}/sessions")        Single<Map<String,String>> revokeSessions(@Path("uid") String uid);
+    @POST
+    Single<AuthResponse> register(@Url String url, @Body AuthRequest request);
+
+    @POST
+    Single<AuthResponse> login(@Url String url, @Body AuthRequest request);
+
+    @POST
+    Single<AuthResponse> refresh(@Url String url, @Body Map<String, String> body);
+
+    @DELETE
+    Single<Map<String, String>> logout(@Url String url, @Body Map<String, String> body);
+
+    @GET
+    Single<List<Map<String, Object>>> getSessions(@Url String url);
+
+    @DELETE
+    Single<Map<String, String>> revokeAllSessions(@Url String url);
+
+    @DELETE
+    Single<Map<String, String>> revokeSession(@Url String url);
+
+    @GET
+    Single<Map<String, Object>> getKeyBundle(@Url String url);
+
+    @POST
+    Single<Map<String, Object>> uploadPrekeys(@Url String url, @Body Map<String, Object> body);
+
+    @GET
+    Single<List<Map<String, Object>>> searchUsers(@Url String url, @Query("q") String query);
+
+    @GET
+    Single<Map<String, Object>> getUser(@Url String url);
+
+    @GET
+    Single<List<Map<String, Object>>> getChats(@Url String url);
+
+    @POST
+    Single<Map<String, Object>> createChat(@Url String url, @Body Map<String, Object> body);
+
+    @GET
+    Single<List<MessageResponse>> getMessages(
+        @Url String url,
+        @Query("before") Long before,
+        @Query("limit") int limit
+    );
+
+    @GET
+    Single<Map<String, Object>> getAdminStats(@Url String url);
+
+    @GET
+    Single<Map<String, Object>> getAdminUsers(@Url String url, @Query("q") String query, @Query("page") int page);
+
+    @GET
+    Single<Map<String, Object>> getAdminUser(@Url String url);
+
+    @PUT
+    Single<Map<String, String>> updateAdminUser(@Url String url, @Body Map<String, Object> body);
+
+    @DELETE
+    Single<Map<String, String>> deleteAdminUser(@Url String url);
+
+    @POST
+    Single<Map<String, String>> setScam(@Url String url, @Body Map<String, Object> body);
+
+    @DELETE
+    Single<Map<String, String>> deleteMessage(@Url String url);
+
+    @DELETE
+    Single<Map<String, String>> deleteAllMessages(@Url String url);
+
+    @DELETE
+    Single<Map<String, String>> revokeAdminSessions(@Url String url);
 }

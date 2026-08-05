@@ -1,7 +1,11 @@
 import { getDB }              from "../src/db/index.js";
 import { hashPassword, generateId } from "../src/crypto/index.js";
-import { ADMIN_USERNAME, ADMIN_PASSWORD } from "../src/constants.js";
+import { ADMIN_USERNAME, ADMIN_PASSWORD, JWT_SECRET_SEED } from "../src/constants.js";
 
+if (!/^[0-9a-f]{64}$/.test(JWT_SECRET_SEED)) {
+  console.error("JWT_SECRET_SEED must contain exactly 64 hexadecimal characters.");
+  process.exit(1);
+}
 if (!ADMIN_PASSWORD || ADMIN_PASSWORD.length < 12) {
   console.error("❌  ADMIN_PASSWORD must be at least 12 characters.");
   console.error("    Usage: ADMIN_PASSWORD=StrongPass123! bun run scripts/create-admin.ts");

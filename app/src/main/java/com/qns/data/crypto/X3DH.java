@@ -1,5 +1,6 @@
 package com.qns.data.crypto;
 
+import org.bouncycastle.crypto.KeyGenerationParameters;
 import org.bouncycastle.crypto.agreement.X25519Agreement;
 import org.bouncycastle.crypto.generators.HKDFBytesGenerator;
 import org.bouncycastle.crypto.params.*;
@@ -11,13 +12,13 @@ import java.security.SecureRandom;
 import java.util.Arrays;
 
 /**
- * X3DH — Extended Triple Diffie-Hellman (Signal Protocol).
+ * X3DH - Extended Triple Diffie-Hellman (Signal Protocol).
  *
  * Alice (отправитель первого сообщения) вычисляет:
- *   DH1 = X25519(IK_A,  SPK_B)   — связь identity Alice со signed prekey Bob
- *   DH2 = X25519(EK_A,  IK_B)    — ephemeral Alice с identity Bob
- *   DH3 = X25519(EK_A,  SPK_B)   — ephemeral Alice со signed prekey Bob
- *   DH4 = X25519(EK_A,  OPK_B)   — (опционально) one-time prekey
+ *   DH1 = X25519(IK_A,  SPK_B)   - связь identity Alice со signed prekey Bob
+ *   DH2 = X25519(EK_A,  IK_B)    - ephemeral Alice с identity Bob
+ *   DH3 = X25519(EK_A,  SPK_B)   - ephemeral Alice со signed prekey Bob
+ *   DH4 = X25519(EK_A,  OPK_B)   - (опционально) one-time prekey
  *   SK  = HKDF(DH1 ‖ DH2 ‖ DH3 ‖ [DH4])
  *
  * Bob получает SK из тех же слагаемых (симметрично).

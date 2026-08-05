@@ -1,15 +1,15 @@
 // ================================================================
 //  QNS CRYPTO UTILITIES
 //
-//  Слой 1: ML-KEM-1024 (Kyber, FIPS 203) — пост-квантовый KEM
-//           ML-DSA-87  (Dilithium, FIPS 204) — пост-квантовая подпись
-//  Слой 2: X25519 + Ed25519 — классическая гибридная схема
+//  Слой 1: ML-KEM-1024 (Kyber, FIPS 203) - пост-квантовый KEM
+//           ML-DSA-87  (Dilithium, FIPS 204) - пост-квантовая подпись
+//  Слой 2: X25519 + Ed25519 - классическая гибридная схема
 //  Итоговый сессионный ключ: HKDF(ML-KEM_secret XOR X25519_secret)
 //  Слой 3: XChaCha20-Poly1305 (payload) + AES-256-GCM (хранение)
 //  Слой 4: Double Ratchet + X3DH (Forward Secrecy)
 //
 //  Сервер использует только: Argon2id, BLAKE3, Ed25519 (JWT).
-//  Всё остальное шифрование — строго на клиенте.
+//  Всё остальное шифрование - строго на клиенте.
 // ================================================================
 
 import { ml_kem1024 }                   from "@noble/post-quantum/ml-kem";
@@ -46,7 +46,7 @@ export function hashHex(data: Uint8Array | string): string {
 }
 
 // ---- Argon2id (пароли) ----
-// memory=64MB, time=3, parallelism=4 — OWASP 2024.
+// memory=64MB, time=3, parallelism=4 - OWASP 2024.
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16);
   const h = argon2id(password, salt, {
@@ -101,11 +101,11 @@ export function verifyEd25519(pk: Uint8Array, msg: Uint8Array, sig: Uint8Array):
   try { return ed25519.verify(sig, msg, pk); } catch { return false; }
 }
 
-// ---- ML-KEM-1024 (Kyber) — только для клиента, сервер хранит pubkey ----
+// ---- ML-KEM-1024 (Kyber) - только для клиента, сервер хранит pubkey ----
 export function generateKemKeyPair() { return ml_kem1024.keygen(); }
 
-// ---- ML-DSA-87 (Dilithium) — сервер верифицирует подписи клиента ----
-export function generateDsaKeyPair() { return ml_dsa87.keygen(new Uint8Array(32)); }
+// ---- ML-DSA-87 (Dilithium) - сервер верифицирует подписи клиента ----
+export function generateDsaKeyPair() { return ml_dsa87.keygen(randomBytes(32)); }
 export function verifyDsaSignature(pk: Uint8Array, msg: Uint8Array, sig: Uint8Array): boolean {
   try { return ml_dsa87.verify(pk, msg, sig); } catch { return false; }
 }

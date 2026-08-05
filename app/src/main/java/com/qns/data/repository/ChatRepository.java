@@ -5,86 +5,164 @@ import com.qns.data.local.dao.MessageDao;
 import com.qns.data.local.entity.ChatEntity;
 import com.qns.data.local.entity.MessageEntity;
 import com.qns.data.remote.ApiService;
+import com.qns.data.remote.ServerRepository;
 import com.qns.data.remote.WebSocketClient;
 import com.qns.data.remote.model.MessageResponse;
 import com.qns.utils.Constants;
-import java.util.*;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import io.reactivex.rxjava3.core.*;
+
+import io.reactivex.rxjava3.core.Completable;
+import io.reactivex.rxjava3.core.Flowable;
+import io.reactivex.rxjava3.core.Single;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 
 @Singleton
 public class ChatRepository {
-    private final ApiService    api;
-    private final ChatDao       chatDao;
-    private final MessageDao    msgDao;
-    private final WebSocketClient ws;
+    private final ApiService api;
+    private final ServerRepository servers;
+    private final ChatDao chatDao;
+    private final MessageDao messageDao;
+    private final WebSocketClient webSocket;
 
     @Inject
-    public ChatRepository(ApiService api, ChatDao chatDao, MessageDao msgDao, WebSocketClient ws) {
-        this.api     = api;
+    public ChatRepository(
+        ApiService api,
+        ServerRepository servers,
+        ChatDao chatDao,
+        MessageDao messageDao,
+        WebSocketClient webSocket
+    ) {
+        this.api = api;
+        this.servers = servers;
         this.chatDao = chatDao;
-        this.msgDao  = msgDao;
-        this.ws      = ws;
+        this.messageDao = messageDao;
+        this.webSocket = webSocket;
     }
 
-    /** Загружает список чатов с сервера и сохраняет в локальную БД. */
     public Completable syncChats() {
-        return api.getChats()
+        return api.getChats(servers.current().api("api/chats"))
             .subscribeOn(Schedulers.io())
             .flatMapCompletable(list -> {
                 List<ChatEntity> entities = new ArrayList<>();
-                for (Map<String,Object> m : list) {
-                    ChatEntity e = new ChatEntity();
-                    e.id   = str(m,"id");
-                    e.type = str(m,"type");
-                    e.name = str(m,"name");
-                    @SuppressWarnings("unchecked")
-                    Map<String,Object> other = (Map<String,Object>) m.get("otherUser");
-                    if (other != null) { e.otherUserId = str(other,"id"); e.otherUsername = str(other,"username"); e.otherUserScam = bool(other,"is_scam"); }
-                    entities.add(e);
+                for (Map<String, Object> raw : list) {
+                    ChatEntity entity = new ChatEntity();
+                    entity.id = value(raw, "id");
+                    entity.type = value(raw, "type");
+                    entity.name = value(raw, "name");
+                    entity.lastMessageAt = number(raw, "last_message_at", number(raw, "lastMessageAt", 0));
+                    Map<String, Object> other = map(raw.get("otherUser"));
+                    if (other != null) {
+                        entity.otherUserId = value(other, "id");
+                        entity.otherUsername = value(other, "username");
+                        entity.otherUserScam = bool(other, "isScam");
+                        entity.otherUserOnline = bool(other, "online");
+                    }
+                    entities.add(entity);
                 }
                 return chatDao.upsertAll(entities);
             });
     }
 
-    public Flowable<List<ChatEntity>> observeChats() { return chatDao.getAll(); }
+    public Flowable<List<ChatEntity>> observeChats() {
+        return chatDao.getAll();
+    }
 
-    /** Загружает историю сообщений и сохраняет локально. */
+    public Single<ChatEntity> getChat(String chatId) {
+        return chatDao.getById(chatId).firstOrError().subscribeOn(Schedulers.io());
+    }
+
     public Completable syncMessages(String chatId) {
-        return api.getMessages(chatId, null, Constants.MESSAGES_PAGE_SIZE)
+        return api.getMessages(
+                servers.current().api("api/chats/" + chatId + "/messages"),
+                null,
+                Constants.MESSAGES_PAGE_SIZE
+            )
             .subscribeOn(Schedulers.io())
             .flatMapCompletable(list -> {
                 List<MessageEntity> entities = new ArrayList<>();
-                for (MessageResponse r : list) {
-                    MessageEntity e = new MessageEntity();
-                    e.id               = r.id;
-                    e.chatId           = r.chatId;
-                    e.senderId         = r.senderId;
-                    e.encryptedContent = r.encryptedPayload;
-                    e.ratchetHeader    = r.ratchetHeader;
-                    e.createdAt        = r.createdAt;
-                    e.delivered        = r.delivered;
-                    e.read             = r.read;
-                    entities.add(e);
-                }
-                return msgDao.insertAll(entities);
+                for (MessageResponse response : list) entities.add(toEntity(response, false));
+                return messageDao.insertAll(entities);
             });
     }
 
-    public Flowable<List<MessageEntity>> observeMessages(String chatId) { return msgDao.getByChat(chatId); }
+    public Flowable<List<MessageEntity>> observeMessages(String chatId) {
+        return messageDao.getByChat(chatId);
+    }
+
+    public Completable saveIncoming(MessageResponse response) {
+        return saveIncoming(response, null);
+    }
+
+    public Completable saveIncoming(MessageResponse response, String decryptedText) {
+        MessageEntity entity = toEntity(response, false);
+        entity.decryptedCache = decryptedText;
+        return messageDao.insert(entity).subscribeOn(Schedulers.io());
+    }
+
+    public Completable saveOutgoing(String chatId, String payload, String header, String signature, String plainText) {
+        MessageEntity entity = new MessageEntity();
+        entity.id = UUID.randomUUID().toString();
+        entity.chatId = chatId;
+        entity.senderId = "me";
+        entity.encryptedContent = payload;
+        entity.ratchetHeader = header;
+        entity.decryptedCache = plainText;
+        entity.isMine = true;
+        entity.createdAt = System.currentTimeMillis();
+        return messageDao.insert(entity).subscribeOn(Schedulers.io());
+    }
+
+    public Completable markRead(String messageId) {
+        return messageDao.markRead(messageId).subscribeOn(Schedulers.io());
+    }
 
     public Completable createDirectChat(String otherUserId) {
-        return api.createChat(Map.of("type","direct","memberIds",List.of(otherUserId)))
+        return api.createChat(
+                servers.current().api("api/chats"),
+                Map.of("type", "direct", "memberIds", List.of(otherUserId))
+            )
             .subscribeOn(Schedulers.io())
-            .flatMapCompletable(r -> syncChats());
+            .flatMapCompletable(ignored -> syncChats());
     }
 
-    private static String str(Map<String,Object> m, String k) {
-        Object v = m.get(k); return v instanceof String ? (String) v : v != null ? v.toString() : null;
+    private static MessageEntity toEntity(MessageResponse response, boolean mine) {
+        MessageEntity entity = new MessageEntity();
+        entity.id = response.id;
+        entity.chatId = response.chatId;
+        entity.senderId = response.senderId;
+        entity.encryptedContent = response.encryptedPayload;
+        entity.ratchetHeader = response.ratchetHeader;
+        entity.createdAt = response.createdAt;
+        entity.delivered = response.delivered;
+        entity.read = response.read;
+        entity.isMine = mine;
+        return entity;
     }
-    private static boolean bool(Map<String,Object> m, String k) {
-        Object v = m.get(k); return Boolean.TRUE.equals(v) || "1".equals(String.valueOf(v));
+
+    private static String value(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private static long number(Map<String, Object> map, String key, long fallback) {
+        Object value = map.get(key);
+        return value instanceof Number ? ((Number) value).longValue() : fallback;
+    }
+
+    private static boolean bool(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        return Boolean.TRUE.equals(value) || "true".equalsIgnoreCase(String.valueOf(value)) || "1".equals(String.valueOf(value));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> map(Object value) {
+        return value instanceof Map ? (Map<String, Object>) value : null;
     }
 }

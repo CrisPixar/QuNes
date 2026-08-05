@@ -1,106 +1,135 @@
-import { PORT, ALLOWED_ORIGINS }             from "./constants.js";
-import { getDB }                             from "./db/index.js";
-import { checkHttpRateLimit, getClientIp }   from "./middleware/rateLimit.js";
-import { websocketHandler }                  from "./websocket/handler.js";
-import { handleRegister, handleLogin, handleRefresh, handleLogout } from "./routes/auth.js";
+import { PORT, ALLOWED_ORIGINS, JWT_SECRET_SEED } from "./constants.js";
+import { getDB } from "./db/index.js";
+import { checkHttpRateLimit, getClientIp } from "./middleware/rateLimit.js";
+import { websocketHandler } from "./websocket/handler.js";
+import {
+  handleRegister,
+  handleLogin,
+  handleRefresh,
+  handleLogout,
+  handleGetSessions,
+  handleRevokeSession,
+  handleRevokeAllSessions,
+} from "./routes/auth.js";
 import { handleGetPrekeys, handleUploadPrekeys, handleGetKeyBundle } from "./routes/keys.js";
-import { handleSearchUsers, handleGetUser }  from "./routes/users.js";
+import { handleSearchUsers, handleGetUser } from "./routes/users.js";
 import { handleGetChats, handleCreateChat, handleGetMessages } from "./routes/chats.js";
 import {
-  handleAdminStats, handleAdminGetUsers, handleAdminGetUser,
-  handleAdminUpdateUser, handleAdminDeleteUser, handleAdminSetScam,
-  handleAdminDeleteMessage, handleAdminDeleteAllMessages, handleAdminRevokeUserSessions,
+  handleAdminStats,
+  handleAdminGetUsers,
+  handleAdminGetUser,
+  handleAdminUpdateUser,
+  handleAdminDeleteUser,
+  handleAdminSetScam,
+  handleAdminDeleteMessage,
+  handleAdminDeleteAllMessages,
+  handleAdminRevokeUserSessions,
 } from "./routes/admin.js";
 
-getDB(); // инициализируем БД при старте
+if (!/^[0-9a-f]{64}$/.test(JWT_SECRET_SEED)) {
+  throw new Error("JWT_SECRET_SEED must contain exactly 64 hexadecimal characters");
+}
+
+getDB();
 
 function corsHeaders(origin: string): Record<string, string> {
-  const ok = ALLOWED_ORIGINS.includes("*") || ALLOWED_ORIGINS.includes(origin);
+  const allowed = ALLOWED_ORIGINS.includes("*") || ALLOWED_ORIGINS.includes(origin);
   return {
-    "Access-Control-Allow-Origin":  ok ? origin : "",
+    "Access-Control-Allow-Origin": allowed ? origin : "null",
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Max-Age":       "86400",
+    "Access-Control-Max-Age": "86400",
+    Vary: "Origin",
   };
 }
 
 Bun.serve({
   port: PORT,
-  async fetch(req: Request, srv: any) {
-    const url    = new URL(req.url);
-    const path   = url.pathname;
-    const method = req.method;
+  async fetch(req: Request, server: any) {
+    const url = new URL(req.url);
     const origin = req.headers.get("origin") ?? "*";
-
-    if (method === "OPTIONS")
-      return new Response(null, { status: 204, headers: corsHeaders(origin) });
-
-    if (path === "/ws") {
-      if (srv.upgrade(req, { data: {} })) return undefined;
+    if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    if (url.pathname === "/ws") {
+      if (server.upgrade(req, { data: {} })) return undefined;
       return new Response("WebSocket upgrade failed", { status: 400 });
     }
-
-    if (!checkHttpRateLimit(getClientIp(req)))
+    if (!checkHttpRateLimit(getClientIp(req))) {
       return new Response(JSON.stringify({ error: "Too many requests" }), {
-        status: 429, headers: { "Content-Type": "application/json", ...corsHeaders(origin) },
-      });
-
-    let res: Response;
-    try { res = await route(req, method, path); }
-    catch (e) {
-      console.error("[SERVER]", e);
-      res = new Response(JSON.stringify({ error: "Internal server error" }), {
-        status: 500, headers: { "Content-Type": "application/json" },
+        status: 429,
+        headers: { "Content-Type": "application/json; charset=utf-8", ...corsHeaders(origin) },
       });
     }
-    for (const [k, v] of Object.entries(corsHeaders(origin))) res.headers.set(k, v);
-    return res;
+
+    let response: Response;
+    try {
+      response = await route(req, req.method, url.pathname);
+    } catch (error) {
+      console.error("[SERVER]", error);
+      response = new Response(JSON.stringify({ error: "Internal server error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+      });
+    }
+    for (const [key, value] of Object.entries(corsHeaders(origin))) response.headers.set(key, value);
+    return response;
   },
   websocket: websocketHandler,
-  error(e) { console.error("[FATAL]", e); return new Response("Server error", { status: 500 }); },
+  error(error) {
+    console.error("[FATAL]", error);
+    return new Response("Server error", { status: 500 });
+  },
 });
 
-async function route(req: Request, m: string, p: string): Promise<Response> {
-  // Auth
-  if (p === "/api/auth/register"  && m === "POST")   return handleRegister(req);
-  if (p === "/api/auth/login"     && m === "POST")   return handleLogin(req);
-  if (p === "/api/auth/refresh"   && m === "POST")   return handleRefresh(req);
-  if (p === "/api/auth/logout"    && m === "DELETE") return handleLogout(req);
-  // Keys
-  if (p === "/api/keys/prekeys"   && m === "POST")   return handleUploadPrekeys(req);
-  const pkM = p.match(/^\/api\/keys\/prekeys\/([^/]+)$/);
-  if (pkM && m === "GET")  return handleGetPrekeys(req, pkM[1]);
-  const bdM = p.match(/^\/api\/keys\/bundle\/([^/]+)$/);
-  if (bdM && m === "GET")  return handleGetKeyBundle(req, bdM[1]);
-  // Users
-  if (p === "/api/users/search"   && m === "GET")    return handleSearchUsers(req);
-  const uM = p.match(/^\/api\/users\/([^/]+)$/);
-  if (uM && m === "GET")   return handleGetUser(req, uM[1]);
-  // Chats
-  if (p === "/api/chats"          && m === "GET")    return handleGetChats(req);
-  if (p === "/api/chats"          && m === "POST")   return handleCreateChat(req);
-  const msM = p.match(/^\/api\/chats\/([^/]+)\/messages$/);
-  if (msM && m === "GET")  return handleGetMessages(req, msM[1]);
-  // Admin
-  if (p === "/api/admin/stats"    && m === "GET")    return handleAdminStats(req);
-  if (p === "/api/admin/users"    && m === "GET")    return handleAdminGetUsers(req);
-  const auM = p.match(/^\/api\/admin\/users\/([^/]+)$/);
-  if (auM) {
-    if (m === "GET")    return handleAdminGetUser(req, auM[1]);
-    if (m === "PUT")    return handleAdminUpdateUser(req, auM[1]);
-    if (m === "DELETE") return handleAdminDeleteUser(req, auM[1]);
+async function route(req: Request, method: string, path: string): Promise<Response> {
+  if (path === "/api/auth/register" && method === "POST") return handleRegister(req);
+  if (path === "/api/auth/login" && method === "POST") return handleLogin(req);
+  if (path === "/api/auth/refresh" && method === "POST") return handleRefresh(req);
+  if (path === "/api/auth/logout" && method === "DELETE") return handleLogout(req);
+  if (path === "/api/auth/sessions" && method === "GET") return handleGetSessions(req);
+  if (path === "/api/auth/sessions" && method === "DELETE") return handleRevokeAllSessions(req);
+
+  const ownSession = path.match(/^\/api\/auth\/sessions\/([^/]+)$/);
+  if (ownSession && method === "DELETE") return handleRevokeSession(req, ownSession[1]);
+
+  if (path === "/api/keys/prekeys" && method === "POST") return handleUploadPrekeys(req);
+  const prekeys = path.match(/^\/api\/keys\/prekeys\/([^/]+)$/);
+  if (prekeys && method === "GET") return handleGetPrekeys(req, prekeys[1]);
+  const bundle = path.match(/^\/api\/keys\/bundle\/([^/]+)$/);
+  if (bundle && method === "GET") return handleGetKeyBundle(req, bundle[1]);
+
+  if (path === "/api/users/search" && method === "GET") return handleSearchUsers(req);
+  const user = path.match(/^\/api\/users\/([^/]+)$/);
+  if (user && method === "GET") return handleGetUser(req, user[1]);
+
+  if (path === "/api/chats" && method === "GET") return handleGetChats(req);
+  if (path === "/api/chats" && method === "POST") return handleCreateChat(req);
+  const messages = path.match(/^\/api\/chats\/([^/]+)\/messages$/);
+  if (messages && method === "GET") return handleGetMessages(req, messages[1]);
+
+  if (path === "/api/admin/stats" && method === "GET") return handleAdminStats(req);
+  if (path === "/api/admin/users" && method === "GET") return handleAdminGetUsers(req);
+  const adminUser = path.match(/^\/api\/admin\/users\/([^/]+)$/);
+  if (adminUser && method === "GET") return handleAdminGetUser(req, adminUser[1]);
+  if (adminUser && method === "PUT") return handleAdminUpdateUser(req, adminUser[1]);
+  if (adminUser && method === "DELETE") return handleAdminDeleteUser(req, adminUser[1]);
+  const scam = path.match(/^\/api\/admin\/users\/([^/]+)\/scam$/);
+  if (scam && method === "POST") return handleAdminSetScam(req, scam[1]);
+  const sessions = path.match(/^\/api\/admin\/users\/([^/]+)\/sessions$/);
+  if (sessions && method === "DELETE") return handleAdminRevokeUserSessions(req, sessions[1]);
+  const message = path.match(/^\/api\/admin\/messages\/([^/]+)$/);
+  if (message && method === "DELETE") return handleAdminDeleteMessage(req, message[1]);
+  const chatMessages = path.match(/^\/api\/admin\/chats\/([^/]+)\/messages$/);
+  if (chatMessages && method === "DELETE") return handleAdminDeleteAllMessages(req, chatMessages[1]);
+
+  if (path === "/health") {
+    return new Response(JSON.stringify({ status: "ok", timestamp: Date.now() }), {
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+    });
   }
-  const scM = p.match(/^\/api\/admin\/users\/([^/]+)\/scam$/);
-  if (scM && m === "POST")   return handleAdminSetScam(req, scM[1]);
-  const ssM = p.match(/^\/api\/admin\/users\/([^/]+)\/sessions$/);
-  if (ssM && m === "DELETE") return handleAdminRevokeUserSessions(req, ssM[1]);
-  const dmM = p.match(/^\/api\/admin\/messages\/([^/]+)$/);
-  if (dmM && m === "DELETE") return handleAdminDeleteMessage(req, dmM[1]);
-  const daM = p.match(/^\/api\/admin\/chats\/([^/]+)\/messages$/);
-  if (daM && m === "DELETE") return handleAdminDeleteAllMessages(req, daM[1]);
-  // Health
-  if (p === "/health") return new Response(JSON.stringify({ status:"ok", ts:Date.now() }), { headers:{"Content-Type":"application/json"} });
-  return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers: {"Content-Type":"application/json"} });
+  return new Response(JSON.stringify({ error: "Not found" }), {
+    status: 404,
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+  });
 }
 
-console.log(`\n🔐 QNS Server  •  port ${PORT}\n   WS: ws://localhost:${PORT}/ws\n`);
+console.log(`QNS server listening on port ${PORT}`);

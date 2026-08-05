@@ -1,16 +1,32 @@
 package com.qns.ui
+
 import android.os.Bundle
+
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+
 import com.qns.ui.navigation.NavGraph
 import com.qns.ui.theme.QNSTheme
+import com.qns.ui.theme.ThemeRepository
+
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
+
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-    override fun onCreate(s: Bundle?) {
-        installSplashScreen(); super.onCreate(s); enableEdgeToEdge()
-        setContent { QNSTheme { NavGraph() } }
+    @Inject lateinit var themeRepository: ThemeRepository
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent {
+            val mode by themeRepository.mode.observeAsState("system")
+            QNSTheme(mode = mode) { NavGraph() }
+        }
     }
 }

@@ -1,117 +1,203 @@
-// Rate: 100 WS сообщений/мин на пользователя
-import { verifyToken }        from "../utils/jwt.js";
-import { getDB }              from "../db/index.js";
-import { generateId }         from "../crypto/index.js";
-import { checkWsRateLimit }   from "../middleware/rateLimit.js";
+import { verifyToken } from "../utils/jwt.js";
+import { getDB } from "../db/index.js";
+import { generateId } from "../crypto/index.js";
+import { checkWsRateLimit } from "../middleware/rateLimit.js";
+import { MAX_HEADER_SIZE, MAX_MESSAGE_PAYLOAD } from "../constants.js";
 
-interface WsData { userId: string; username: string; role: string; ip: string; sessionId: string; }
-const connections = new Map<string, Set<any>>();
-
-export function broadcastToUser(userId: string, msg: object): void {
-  const p = JSON.stringify(msg);
-  connections.get(userId)?.forEach(ws => { try { ws.send(p); } catch {} });
+interface WsData {
+  userId: string;
+  username: string;
+  role: string;
+  ip: string;
+  sessionId: string;
 }
 
-function broadcastToChat(chatId: string, msg: object, excludeId?: string): void {
+const connections = new Map<string, Set<any>>();
+
+export function broadcastToUser(userId: string, message: object): void {
+  const payload = JSON.stringify(message);
+  for (const socket of connections.get(userId) ?? []) {
+    try { socket.send(payload); } catch {}
+  }
+}
+
+function isMember(chatId: string, userId: string): boolean {
+  return Boolean(getDB().query(
+    "SELECT 1 FROM chat_members WHERE chat_id = ? AND user_id = ?",
+  ).get(chatId, userId));
+}
+
+function broadcastToChat(chatId: string, message: object, excludeUserId?: string): void {
   const members = getDB().query("SELECT user_id FROM chat_members WHERE chat_id = ?").all(chatId) as any[];
-  for (const { user_id } of members) if (user_id !== excludeId) broadcastToUser(user_id, msg);
+  for (const member of members) {
+    if (member.user_id !== excludeUserId) broadcastToUser(member.user_id, message);
+  }
 }
 
 export const websocketHandler = {
   open(ws: any) {
+    ws.authTimeout = setTimeout(() => {
+      if (!ws.data?.userId) ws.close(4001, "Authentication timeout");
+    }, 10_000);
     ws.send(JSON.stringify({ type: "connected" }));
-    ws.authTimeout = setTimeout(() => { if (!ws.data?.userId) ws.close(4001, "Auth timeout"); }, 10_000);
   },
+
   message(ws: any, raw: string | Buffer) {
     try {
-      const data: WsData = ws.data;
-      let msg: any;
-      try { msg = JSON.parse(raw.toString()); }
-      catch { ws.send(JSON.stringify({ type: "error", message: "Invalid JSON" })); return; }
-
+      const message = JSON.parse(raw.toString()) as Record<string, any>;
+      const data = ws.data as WsData | undefined;
       if (!data?.userId) {
-        if (msg.type !== "auth") { ws.send(JSON.stringify({ type: "error", message: "Send auth first" })); return; }
-        handleAuth(ws, msg); return;
+        if (message.type !== "auth") {
+          ws.send(JSON.stringify({ type: "error", message: "Send auth first" }));
+          return;
+        }
+        handleAuth(ws, message);
+        return;
       }
       if (!checkWsRateLimit(data.userId)) {
-        ws.send(JSON.stringify({ type: "error", message: "Rate limit exceeded" })); return;
+        ws.send(JSON.stringify({ type: "error", message: "Rate limit exceeded" }));
+        return;
       }
-      switch (msg.type) {
-        case "message": handleMessage(ws, data, msg); break;
-        case "typing":
-          if (msg.chatId) broadcastToChat(msg.chatId, { type:"typing", chatId:msg.chatId, userId:data.userId }, data.userId);
+      switch (message.type) {
+        case "message":
+          handleMessage(ws, data, message);
           break;
-        case "read":    handleRead(data, msg);    break;
-        case "ping":    ws.send(JSON.stringify({ type: "pong" })); break;
-        default:        ws.send(JSON.stringify({ type: "error", message: "Unknown type" }));
+        case "typing":
+          if (typeof message.chatId === "string" && isMember(message.chatId, data.userId)) {
+            broadcastToChat(message.chatId, { type: "typing", chatId: message.chatId, userId: data.userId }, data.userId);
+          }
+          break;
+        case "read":
+          handleRead(data, message);
+          break;
+        case "ping":
+          ws.send(JSON.stringify({ type: "pong", timestamp: Date.now() }));
+          break;
+        default:
+          ws.send(JSON.stringify({ type: "error", message: "Unknown type" }));
       }
-    } catch (e) { console.error("[WS] Error:", e); }
+    } catch {
+      ws.send(JSON.stringify({ type: "error", message: "Invalid message" }));
+    }
   },
+
   close(ws: any) {
     clearTimeout(ws.authTimeout);
-    const data: WsData = ws.data;
+    const data = ws.data as WsData | undefined;
     if (!data?.userId) return;
-    const set = connections.get(data.userId);
-    if (set) { set.delete(ws); if (set.size === 0) { connections.delete(data.userId); broadcastStatus(data.userId, false); } }
+    const userConnections = connections.get(data.userId);
+    if (userConnections) {
+      userConnections.delete(ws);
+      if (!userConnections.size) {
+        connections.delete(data.userId);
+        broadcastStatus(data.userId, false);
+      }
+    }
     getDB().run("DELETE FROM ws_sessions WHERE id = ?", [data.sessionId]);
-    console.log(`[WS] Disconnected: ${data.username}`);
   },
-  error(ws: any, e: Error) { console.error("[WS] Error:", e.message); },
+
+  error(_ws: any, error: Error) {
+    console.error("[WS]", error.message);
+  },
 };
 
-function handleAuth(ws: any, msg: any): void {
-  if (!msg.token) { ws.close(4001, "No token"); return; }
+function handleAuth(ws: any, message: Record<string, any>): void {
+  if (typeof message.token !== "string" || message.token.length > 4096) {
+    ws.close(4001, "Invalid token");
+    return;
+  }
   try {
-    const p = verifyToken(msg.token);
+    const payload = verifyToken(message.token, "access");
+    const user = getDB().query("SELECT id, username, role FROM users WHERE id = ?").get(payload.sub) as any;
+    if (!user) {
+      ws.close(4001, "User not found");
+      return;
+    }
     clearTimeout(ws.authTimeout);
     const sessionId = generateId();
-    const ip = ws.remoteAddress ?? "unknown";
-    ws.data = { userId: p.sub, username: p.username, role: p.role, ip, sessionId };
-    if (!connections.has(p.sub)) connections.set(p.sub, new Set());
-    connections.get(p.sub)!.add(ws);
-    getDB().run("INSERT INTO ws_sessions (id,user_id,ip_address,user_agent,connected_at) VALUES (?,?,?,?,?)",
-      [sessionId, p.sub, ip, "", Date.now()]);
-    ws.send(JSON.stringify({ type: "auth_ok", userId: p.sub }));
-    broadcastStatus(p.sub, true);
-    console.log(`[WS] Authenticated: ${p.username} from ${ip}`);
-  } catch { ws.close(4001, "Invalid token"); }
+    const data: WsData = {
+      userId: user.id,
+      username: user.username,
+      role: user.role,
+      ip: ws.remoteAddress ?? "unknown",
+      sessionId,
+    };
+    ws.data = data;
+    if (!connections.has(data.userId)) connections.set(data.userId, new Set());
+    connections.get(data.userId)!.add(ws);
+    getDB().run(
+      "INSERT INTO ws_sessions (id,user_id,ip_address,user_agent,connected_at) VALUES (?,?,?,?,?)",
+      [sessionId, data.userId, data.ip, "", Date.now()],
+    );
+    ws.send(JSON.stringify({ type: "auth_ok", userId: data.userId }));
+    broadcastStatus(data.userId, true);
+  } catch {
+    ws.close(4001, "Invalid token");
+  }
 }
 
-function handleMessage(ws: any, data: WsData, msg: any): void {
-  const { chatId, encryptedPayload, signature, nonce, ratchetHeader } = msg;
+function handleMessage(ws: any, data: WsData, message: Record<string, any>): void {
+  const chatId = typeof message.chatId === "string" ? message.chatId : "";
+  const encryptedPayload = typeof message.encryptedPayload === "string" ? message.encryptedPayload : "";
+  const ratchetHeader = typeof message.ratchetHeader === "string" ? message.ratchetHeader : null;
+  const signature = typeof message.signature === "string" ? message.signature : null;
+  const nonce = typeof message.nonce === "string" ? message.nonce : null;
   if (!chatId || !encryptedPayload) {
-    ws.send(JSON.stringify({ type: "error", message: "chatId and encryptedPayload required" })); return;
+    ws.send(JSON.stringify({ type: "error", message: "chatId and encryptedPayload required" }));
+    return;
   }
-  const db = getDB();
-  if (!db.query("SELECT 1 FROM chat_members WHERE chat_id = ? AND user_id = ?").get(chatId, data.userId)) {
-    ws.send(JSON.stringify({ type: "error", message: "Not a member" })); return;
+  if (encryptedPayload.length > MAX_MESSAGE_PAYLOAD || (ratchetHeader && ratchetHeader.length > MAX_HEADER_SIZE) || (signature && signature.length > MAX_HEADER_SIZE) || (nonce && nonce.length > MAX_HEADER_SIZE)) {
+    ws.send(JSON.stringify({ type: "error", message: "Message is too large" }));
+    return;
   }
-  const messageId = generateId(); const now = Date.now();
-  db.run(
-    "INSERT INTO messages (id,chat_id,sender_id,encrypted_payload,ratchet_header,signature,payload_size,created_at) VALUES (?,?,?,?,?,?,?,?)",
-    [messageId, chatId, data.userId, encryptedPayload, ratchetHeader ?? null, signature ?? null, String(encryptedPayload).length, now]
+  if (!isMember(chatId, data.userId)) {
+    ws.send(JSON.stringify({ type: "error", message: "Not a member" }));
+    return;
+  }
+
+  const messageId = generateId();
+  const createdAt = Date.now();
+  getDB().run(
+    "INSERT INTO messages (id,chat_id,sender_id,encrypted_payload,ratchet_header,signature,server_nonce,payload_size,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+    [messageId, chatId, data.userId, encryptedPayload, ratchetHeader, signature, nonce, encryptedPayload.length, createdAt],
   );
-  broadcastToChat(chatId, { type:"message", messageId, fromUserId:data.userId, chatId, encryptedPayload, ratchetHeader:ratchetHeader??null, signature:signature??null, nonce:nonce??null, createdAt:now }, data.userId);
-  ws.send(JSON.stringify({ type: "message_sent", messageId, chatId, createdAt: now }));
+  const event = {
+    type: "message",
+    id: messageId,
+    messageId,
+    chatId,
+    senderId: data.userId,
+    encryptedPayload,
+    ratchetHeader,
+    signature,
+    nonce,
+    createdAt,
+    delivered: false,
+    read: false,
+  };
+  broadcastToChat(chatId, event, data.userId);
+  ws.send(JSON.stringify({ type: "message_sent", messageId, chatId, createdAt }));
 }
 
-function handleRead(data: WsData, msg: any): void {
-  const { chatId, messageId } = msg;
-  if (!chatId || !messageId) return;
+function handleRead(data: WsData, message: Record<string, any>): void {
+  const chatId = typeof message.chatId === "string" ? message.chatId : "";
+  const messageId = typeof message.messageId === "string" ? message.messageId : "";
+  if (!chatId || !messageId || !isMember(chatId, data.userId)) return;
   getDB().run("UPDATE messages SET read = 1 WHERE id = ? AND chat_id = ?", [messageId, chatId]);
-  broadcastToChat(chatId, { type:"read_receipt", chatId, messageId, userId:data.userId }, data.userId);
+  broadcastToChat(chatId, { type: "read_receipt", chatId, messageId, userId: data.userId }, data.userId);
 }
 
 function broadcastStatus(userId: string, online: boolean): void {
   const db = getDB();
   if (!online) db.run("UPDATE users SET last_seen = ? WHERE id = ?", [Date.now(), userId]);
   const contacts = db.query(`
-    SELECT DISTINCT cm2.user_id FROM chat_members cm1
-    JOIN chat_members cm2 ON cm1.chat_id = cm2.chat_id
-    WHERE cm1.user_id = ? AND cm2.user_id != ?
+    SELECT DISTINCT other.user_id
+    FROM chat_members mine
+    JOIN chat_members other ON mine.chat_id = other.chat_id
+    WHERE mine.user_id = ? AND other.user_id != ?
   `).all(userId, userId) as any[];
   const event = online
     ? { type: "user_online", userId }
     : { type: "user_offline", userId, lastSeen: Date.now() };
-  for (const { user_id } of contacts) broadcastToUser(user_id, event);
+  for (const contact of contacts) broadcastToUser(contact.user_id, event);
 }

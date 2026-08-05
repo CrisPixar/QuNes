@@ -14,6 +14,7 @@ public interface MessageDao {
     @Query("UPDATE messages SET decryptionFailed = 1 WHERE id = :id") Completable markFailed(String id);
     @Query("UPDATE messages SET delivered = 1 WHERE id = :id") Completable markDelivered(String id);
     @Query("UPDATE messages SET read = 1 WHERE chatId = :cid") Completable markAllRead(String cid);
+    @Query("UPDATE messages SET read = 1 WHERE id = :id") Completable markRead(String id);
     @Query("SELECT COUNT(*) FROM messages WHERE chatId = :cid AND read = 0 AND isMine = 0") Flowable<Integer> unreadCount(String cid);
     @Query("DELETE FROM messages WHERE chatId = :cid") Completable deleteByChat(String cid);
 }

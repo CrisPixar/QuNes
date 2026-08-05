@@ -22,7 +22,7 @@ describe("Argon2id", () => {
   it("verifies correct password",      async () => expect(await verifyPassword("P@ss1", await hashPassword("P@ss1"))).toBe(true));
   it("rejects wrong password",         async () => expect(await verifyPassword("Wrong", await hashPassword("P@ss1"))).toBe(false));
   it("rejects malformed stored hash",  async () => expect(await verifyPassword("x", "notahash")).toBe(false));
-}, { timeout: 60_000 });
+});
 
 describe("Constant-time compare", () => {
   it("equal arrays → true",   () => expect(constantTimeEqual(new Uint8Array([1,2,3]), new Uint8Array([1,2,3]))).toBe(true));

@@ -1,70 +1,133 @@
 package com.qns.data.remote;
 
 import android.util.Log;
+
 import com.google.gson.Gson;
 import com.qns.utils.Constants;
+
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+
 import javax.inject.Inject;
 import javax.inject.Singleton;
+
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.subjects.PublishSubject;
-import okhttp3.*;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.WebSocket;
+import okhttp3.WebSocketListener;
 
 @Singleton
 public class WebSocketClient {
     private static final String TAG = "QNS_WS";
     private final Gson gson = new Gson();
     private final OkHttpClient http;
-    private WebSocket ws;
-    private boolean authed = false;
-    private String  token;
-    private final PublishSubject<Map<String,Object>> events = PublishSubject.create();
+    private final ServerRepository servers;
+    private final PublishSubject<Map<String, Object>> events = PublishSubject.create();
+    private WebSocket socket;
+    private String token;
+    private boolean authenticated;
+    private boolean stopped;
 
     @Inject
-    public WebSocketClient(OkHttpClient http) { this.http = http; }
+    public WebSocketClient(OkHttpClient http, ServerRepository servers) {
+        this.http = http;
+        this.servers = servers;
+    }
 
-    public void connect(String token) {
-        this.token = token; this.authed = false;
-        ws = http.newWebSocket(
-            new Request.Builder().url(Constants.SERVER_WS_URL).build(),
-            new WebSocketListener() {
-                @Override public void onOpen(WebSocket s, Response r) {
-                    sendRaw(Map.of("type","auth","token",WebSocketClient.this.token));
-                }
-                @Override @SuppressWarnings("unchecked")
-                public void onMessage(WebSocket s, String text) {
-                    try {
-                        Map<String,Object> e = gson.fromJson(text, Map.class);
-                        if ("auth_ok".equals(e.get("type"))) { authed = true; Log.d(TAG,"Authenticated"); }
-                        else events.onNext(e);
-                    } catch (Exception ex) { Log.e(TAG,"Parse error", ex); }
-                }
-                @Override public void onFailure(WebSocket s, Throwable t, Response r) {
-                    authed = false; Log.e(TAG,"Failure: " + t.getMessage());
-                    Observable.timer(Constants.WS_RECONNECT_DELAY_MS, TimeUnit.MILLISECONDS)
-                        .subscribe(x -> connect(WebSocketClient.this.token));
-                }
-                @Override public void onClosed(WebSocket s, int c, String r) { authed = false; }
+    public synchronized void connect(String accessToken) {
+        if (accessToken == null || accessToken.isEmpty()) return;
+        stopped = false;
+        token = accessToken;
+        authenticated = false;
+        if (socket != null) socket.close(1000, "reconnect");
+        Request request = new Request.Builder().url(servers.current().wsUrl).build();
+        socket = http.newWebSocket(request, new WebSocketListener() {
+            @Override
+            public void onOpen(WebSocket webSocket, Response response) {
+                sendRaw(Map.of("type", "auth", "token", WebSocketClient.this.token));
             }
-        );
+
+            @Override
+            public void onMessage(WebSocket webSocket, String text) {
+                try {
+                    Map<String, Object> event = gson.fromJson(text, Map.class);
+                    if ("auth_ok".equals(event.get("type"))) {
+                        authenticated = true;
+                        Log.d(TAG, "Authenticated");
+                    } else {
+                        events.onNext(event);
+                    }
+                } catch (Exception error) {
+                    Log.e(TAG, "Message parse failed", error);
+                }
+            }
+
+            @Override
+            public void onFailure(WebSocket webSocket, Throwable error, Response response) {
+                authenticated = false;
+                Log.w(TAG, "Connection failed", error);
+                scheduleReconnect();
+            }
+
+            @Override
+            public void onClosed(WebSocket webSocket, int code, String reason) {
+                authenticated = false;
+                if (!stopped) scheduleReconnect();
+            }
+        });
     }
 
-    public void disconnect() {
-        if (ws != null) ws.close(1000, "logout");
-        ws = null; authed = false; token = null;
+    public synchronized void disconnect() {
+        stopped = true;
+        if (socket != null) socket.close(1000, "logout");
+        socket = null;
+        authenticated = false;
+        token = null;
     }
 
-    public void sendMessage(String chatId, String enc, String hdr, String sig) {
-        sendRaw(Map.of("type","message","chatId",chatId,"encryptedPayload",enc,
-            "ratchetHeader",hdr!=null?hdr:"","signature",sig!=null?sig:""));
+    public void sendMessage(String chatId, String encryptedPayload, String ratchetHeader, String signature) {
+        sendRaw(Map.of(
+            "type", "message",
+            "chatId", chatId,
+            "encryptedPayload", encryptedPayload,
+            "ratchetHeader", ratchetHeader == null ? "" : ratchetHeader,
+            "signature", signature == null ? "" : signature
+        ));
     }
-    public void sendTyping(String chatId)  { sendRaw(Map.of("type","typing","chatId",chatId)); }
-    public void sendRead(String cid, String mid) { sendRaw(Map.of("type","read","chatId",cid,"messageId",mid)); }
-    public void sendPing() { sendRaw(Map.of("type","ping")); }
 
-    public Observable<Map<String,Object>> events() { return events.hide(); }
-    public boolean isAuthenticated() { return authed; }
+    public void sendTyping(String chatId) {
+        if (authenticated) sendRaw(Map.of("type", "typing", "chatId", chatId));
+    }
 
-    private void sendRaw(Map<String,Object> d) { if (ws != null) ws.send(gson.toJson(d)); }
+    public void sendRead(String chatId, String messageId) {
+        if (authenticated) sendRaw(Map.of("type", "read", "chatId", chatId, "messageId", messageId));
+    }
+
+    public void sendPing() {
+        if (authenticated) sendRaw(Map.of("type", "ping"));
+    }
+
+    public Observable<Map<String, Object>> events() {
+        return events.hide();
+    }
+
+    public boolean isAuthenticated() {
+        return authenticated;
+    }
+
+    private void scheduleReconnect() {
+        final String reconnectToken = token;
+        if (stopped || reconnectToken == null || reconnectToken.isEmpty()) return;
+        Observable.timer(Constants.WS_RECONNECT_DELAY_MS, TimeUnit.MILLISECONDS)
+            .subscribe(ignored -> {
+                if (!stopped && reconnectToken.equals(token)) connect(reconnectToken);
+            });
+    }
+
+    private synchronized void sendRaw(Map<String, Object> data) {
+        if (socket != null) socket.send(gson.toJson(data));
+    }
 }

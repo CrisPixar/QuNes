@@ -19,7 +19,8 @@ fun AdminScreen(onBack: () -> Unit, vm: AdminViewModel = hiltViewModel()) {
     val loading by vm.loading.observeAsState(false)
     val error   by vm.error.observeAsState()
     var scamDialogUser by remember { mutableStateOf<AdminViewModel.AdminUser?>(null) }
-    var scamReason     by remember { mutableStateOf("") }
+    var deleteDialogUser by remember { mutableStateOf<AdminViewModel.AdminUser?>(null) }
+    var scamReason by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) { vm.loadData() }
 
@@ -38,8 +39,28 @@ fun AdminScreen(onBack: () -> Unit, vm: AdminViewModel = hiltViewModel()) {
         )
     }
 
+    deleteDialogUser?.let { user ->
+        AlertDialog(
+            onDismissRequest = { deleteDialogUser = null },
+            title = { Text("Удалить аккаунт?") },
+            text = { Text("Аккаунт @${user.username} и связанные данные будут удалены.") },
+            confirmButton = {
+                TextButton(onClick = { vm.deleteUser(user.id); deleteDialogUser = null }) {
+                    Text("Удалить", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { deleteDialogUser = null }) { Text("Отмена") } },
+        )
+    }
+
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Admin Panel 🛡️") }, navigationIcon = { IconButton(onBack) { Icon(Icons.Filled.ArrowBack, null) } }) }
+        topBar = {
+            TopAppBar(
+                title = { Text("Admin Panel 🛡️") },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } },
+                actions = { IconButton(onClick = { vm.loadData() }) { Icon(Icons.Filled.Refresh, null) } },
+            )
+        }
     ) { pad ->
         if (loading) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         else LazyColumn(contentPadding = pad) {
@@ -77,15 +98,16 @@ fun AdminScreen(onBack: () -> Unit, vm: AdminViewModel = hiltViewModel()) {
                     supportingContent = { Text("IP: ${user.lastIp ?: "?"} · Сессий: ${user.activeSessions}", fontSize=12.sp) },
                     trailingContent = {
                         Row {
-                            // SCAM
-                            IconButton({ scamDialogUser = user }) {
+                            IconButton(onClick = { vm.setAdmin(user.id, user.role != "admin") }) {
+                                Icon(Icons.Filled.AdminPanelSettings, null, tint = if (user.role == "admin") EncryptGreen else MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            IconButton(onClick = { scamDialogUser = user }) {
                                 Icon(if (user.isScam) Icons.Filled.CheckCircle else Icons.Filled.Warning, null,
                                     tint = if (user.isScam) EncryptGreen else ScamRed)
                             }
                             // Отозвать сессии
                             IconButton({ vm.revokeUserSessions(user.id) }) { Icon(Icons.Filled.PhoneLocked, null) }
-                            // Удалить аккаунт
-                            IconButton({ vm.deleteUser(user.id) }) { Icon(Icons.Filled.Delete, null, tint = MaterialTheme.colorScheme.error) }
+                            IconButton(onClick = { deleteDialogUser = user }) { Icon(Icons.Filled.Delete, null, tint = MaterialTheme.colorScheme.error) }
                         }
                     }
                 )

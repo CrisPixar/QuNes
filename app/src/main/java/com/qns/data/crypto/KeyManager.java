@@ -13,6 +13,7 @@ import org.bouncycastle.pqc.crypto.crystals.dilithium.*;
 import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
 
 import java.security.*;
+import java.security.spec.NamedParameterSpec;
 import java.util.Arrays;
 import javax.crypto.*;
 import javax.inject.Inject;
@@ -71,7 +72,7 @@ public class KeyManager {
     }
 
     // ---- ML-KEM-1024 (CRYSTALS-Kyber, FIPS 203) ----
-    // Пост-квантовый KEM — устойчив к атаке Шора
+    // Пост-квантовый KEM - устойчив к атаке Шора
 
     public AsymmetricCipherKeyPair generateKyberKeyPair() {
         KyberKeyPairGenerator gen = new KyberKeyPairGenerator();
@@ -99,9 +100,9 @@ public class KeyManager {
         return ((DilithiumPublicKeyParameters) kp.getPublic()).getEncoded();
     }
 
-    public byte[] signWithDilithium(byte[] privKeyBytes, byte[] message) throws Exception {
+    public byte[] signWithDilithium(AsymmetricCipherKeyPair keyPair, byte[] message) throws Exception {
         DilithiumSigner signer = new DilithiumSigner();
-        signer.init(true, new DilithiumPrivateKeyParameters(DilithiumParameters.dilithium5, privKeyBytes));
+        signer.init(true, keyPair.getPrivate());
         return signer.generateSignature(message);
     }
 
@@ -117,7 +118,7 @@ public class KeyManager {
 
     public KeyPair generateX25519KeyPair() throws Exception {
         KeyPairGenerator kpg = KeyPairGenerator.getInstance("X25519", "BC");
-        kpg.initialize(255);
+        kpg.initialize(new NamedParameterSpec("X25519"), random);
         return kpg.generateKeyPair();
     }
 
@@ -133,7 +134,7 @@ public class KeyManager {
         byte[] b = new byte[n]; random.nextBytes(b); return b;
     }
 
-    /** Обнуляет byte[] с ключевым материалом — критически важно! */
+    /** Обнуляет byte[] с ключевым материалом - критически важно! */
     public static void wipe(byte[]... keys) {
         for (byte[] k : keys) if (k != null) Arrays.fill(k, (byte) 0);
     }

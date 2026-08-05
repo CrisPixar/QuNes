@@ -14,13 +14,13 @@ import com.qns.ui.theme.EncryptGreen; import com.qns.ui.theme.ScamRed
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatListScreen(onChatClick: (String) -> Unit, vm: ChatListViewModel = hiltViewModel()) {
+fun ChatListScreen(onChatClick: (String) -> Unit, onAdd: () -> Unit = {}, vm: ChatListViewModel = hiltViewModel()) {
     val chats   by vm.chats.observeAsState(emptyList())
     val loading by vm.loading.observeAsState(false)
 
     Scaffold(
         topBar = { LargeTopAppBar(title = { Text("QNS") }) },
-        floatingActionButton = { FloatingActionButton({}) { Icon(Icons.Filled.Add, null) } }
+        floatingActionButton = { FloatingActionButton(onClick = onAdd) { Icon(Icons.Filled.Add, null) } }
     ) { pad ->
         if (loading && chats.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -34,7 +34,7 @@ fun ChatListScreen(onChatClick: (String) -> Unit, vm: ChatListViewModel = hiltVi
 
 @Composable
 private fun ChatListItem(chat: ChatEntity, onClick: (String) -> Unit) {
-    val name = chat.otherUsername ?: chat.name ?: "Chat"
+    val name = listOf(chat.otherUsername, chat.name).firstOrNull { !it.isNullOrBlank() } ?: "Chat"
     ListItem(
         headlineContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -1,6 +1,7 @@
 package com.qns.data.crypto;
 
 import android.util.Base64;
+import org.bouncycastle.crypto.KeyGenerationParameters;
 import org.bouncycastle.crypto.agreement.X25519Agreement;
 import org.bouncycastle.crypto.generators.HKDFBytesGenerator;
 import org.bouncycastle.crypto.generators.X25519KeyPairGenerator;
@@ -19,13 +20,13 @@ import java.util.Arrays;
  * Double Ratchet Algorithm (Signal Protocol).
  *
  * Обеспечивает:
- *   Forward Secrecy      — компрометация текущего ключа не раскрывает прошлые
- *   Break-in Recovery    — после компрометации новые ключи снова безопасны
- *   Асинхронная работа   — работает без одновременного онлайна обеих сторон
+ *   Forward Secrecy      - компрометация текущего ключа не раскрывает прошлые
+ *   Break-in Recovery    - после компрометации новые ключи снова безопасны
+ *   Асинхронная работа   - работает без одновременного онлайна обеих сторон
  *
  * Два механизма:
- *   1. DH Ratchet    — при получении нового DH ключа собеседника
- *   2. Symmetric Ratchet — на каждое сообщение (KDF_CK)
+ *   1. DH Ratchet    - при получении нового DH ключа собеседника
+ *   2. Symmetric Ratchet - на каждое сообщение (KDF_CK)
  */
 public class DoubleRatchet {
 
@@ -71,6 +72,8 @@ public class DoubleRatchet {
     // ---- Шифрование ----
 
     public EncryptedMessage encrypt(byte[] plaintext) throws Exception {
+        if (sendChainKey == null || dhSendPub == null) throw new IllegalStateException("Ratchet is not initialized");
+        if (plaintext == null) throw new IllegalArgumentException("Plaintext is null");
         byte[][] ck_mk = kdfCK(sendChainKey);
         byte[] newCK = ck_mk[0], mk = ck_mk[1];
         Header hdr = new Header(dhSendPub, sendN, prevN);
@@ -85,7 +88,10 @@ public class DoubleRatchet {
     // ---- Расшифровка ----
 
     public byte[] decrypt(EncryptedMessage msg) throws Exception {
+        if (msg == null || msg.header == null || msg.ct == null) throw new IllegalArgumentException("Invalid encrypted message");
         Header hdr = msg.header;
+        if (hdr.dhPub == null || hdr.dhPub.length != 32 || hdr.n < 0 || hdr.prevN < 0) throw new IllegalArgumentException("Invalid ratchet header");
+        if (msg.ct.length < CryptoConstants.AES_GCM_NONCE_SIZE + (CryptoConstants.AES_GCM_TAG_SIZE / 8)) throw new IllegalArgumentException("Invalid ciphertext");
         String skKey = skipKey(hdr.dhPub, hdr.n);
         if (skippedKeys.containsKey(skKey)) {
             byte[] mk = skippedKeys.remove(skKey);
@@ -97,6 +103,8 @@ public class DoubleRatchet {
             dhRatchet(hdr.dhPub);
             recvN = 0;
         }
+        if (recvChainKey == null) throw new IllegalStateException("Receive chain is not initialized");
+        if (hdr.n < recvN) throw new IllegalStateException("Old ratchet message");
         skipKeys(recvN, hdr.n);
         byte[][] ck_mk = kdfCK(recvChainKey);
         byte[] newCK = ck_mk[0], mk = ck_mk[1];
@@ -142,9 +150,11 @@ public class DoubleRatchet {
     }
 
     private void skipKeys(int from, int to) throws Exception {
-        if (to - from > CryptoConstants.RATCHET_MAX_SKIP)
+        if (recvChainKey == null) throw new IllegalStateException("Receive chain is not initialized");
+        if (to < from || to - from > CryptoConstants.RATCHET_MAX_SKIP)
             throw new Exception("Too many skipped messages");
         while (from < to) {
+            if (skippedKeys.size() >= CryptoConstants.RATCHET_MAX_SKIP) throw new Exception("Skipped key limit reached");
             byte[][] ck_mk = kdfCK(recvChainKey);
             byte[] newCK = ck_mk[0], mk = ck_mk[1];
             Arrays.fill(recvChainKey, (byte) 0);
@@ -170,6 +180,7 @@ public class DoubleRatchet {
     }
 
     private byte[] aeadDecrypt(byte[] mk, byte[] ct, byte[] ad) throws Exception {
+        if (ct == null || ct.length < CryptoConstants.AES_GCM_NONCE_SIZE + (CryptoConstants.AES_GCM_TAG_SIZE / 8)) throw new IllegalArgumentException("Invalid ciphertext");
         byte[] encKey = Arrays.copyOf(mk, 32);
         byte[] iv  = Arrays.copyOf(ct, 12);
         byte[] enc = Arrays.copyOfRange(ct, 12, ct.length);
@@ -216,7 +227,10 @@ public class DoubleRatchet {
 
     public static class Header {
         public final byte[] dhPub; public final int n, prevN;
-        public Header(byte[] dhPub, int n, int prevN) { this.dhPub=dhPub; this.n=n; this.prevN=prevN; }
+        public Header(byte[] dhPub, int n, int prevN) {
+            if (dhPub == null || dhPub.length != 32) throw new IllegalArgumentException("Invalid DH public key");
+            this.dhPub = dhPub.clone(); this.n = n; this.prevN = prevN;
+        }
         public byte[] toBytes() {
             byte[] r = new byte[40];
             System.arraycopy(dhPub,0,r,0,32);
@@ -225,6 +239,7 @@ public class DoubleRatchet {
             return r;
         }
         public static Header fromBytes(byte[] d) {
+            if (d == null || d.length != 40) throw new IllegalArgumentException("Invalid header");
             byte[] dh = Arrays.copyOf(d,32);
             int n    = ((d[32]&0xFF)<<24)|((d[33]&0xFF)<<16)|((d[34]&0xFF)<<8)|(d[35]&0xFF);
             int prev = ((d[36]&0xFF)<<24)|((d[37]&0xFF)<<16)|((d[38]&0xFF)<<8)|(d[39]&0xFF);
@@ -252,6 +267,10 @@ public class DoubleRatchet {
     }
 
     public void importState(State s) {
+        if (s == null) throw new IllegalArgumentException("State is null");
+        KeyManager.wipe(rootKey, sendChainKey, recvChainKey, dhSendPriv, dhSendPub, dhRecvPub);
+        for (byte[] value : skippedKeys.values()) KeyManager.wipe(value);
+        skippedKeys.clear();
         rootKey=s.rootKey!=null?s.rootKey.clone():null;
         sendChainKey=s.sendChainKey!=null?s.sendChainKey.clone():null;
         recvChainKey=s.recvChainKey!=null?s.recvChainKey.clone():null;
