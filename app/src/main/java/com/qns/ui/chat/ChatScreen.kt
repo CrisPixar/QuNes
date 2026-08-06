@@ -124,7 +124,7 @@ private fun MessageBubble(message: MessageEntity) {
             modifier = Modifier.widthIn(max = 300.dp),
         ) {
             Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                Text(text)
+                Text(markdownText(text))
                 Row(Modifier.align(Alignment.End), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(formatTime(message.createdAt), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (message.isMine) Text(if (message.read) "✓✓" else if (message.delivered) "✓" else "·", fontSize = 11.sp, color = EncryptGreen)

@@ -106,5 +106,9 @@ export function handleGetMessages(req: Request, chatId: string): Response {
   const rows = before
     ? db.query(`${base} AND created_at < ? ORDER BY created_at DESC LIMIT ?`).all(chatId, before, limit)
     : db.query(`${base} ORDER BY created_at DESC LIMIT ?`).all(chatId, limit);
-  return json((rows as any[]).reverse());
+  return json((rows as any[]).reverse().map((row) => ({
+    ...row,
+    delivered: Boolean(row.delivered),
+    read: Boolean(row.read),
+  })));
 }
