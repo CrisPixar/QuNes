@@ -22,9 +22,8 @@ android {
 
     signingConfigs {
         release {
-            if (System.getenv("KEYSTORE_BASE64")) {
-                def kf = file("${buildDir}/release.keystore")
-                kf.bytes = Base64.decoder.decode(System.getenv("KEYSTORE_BASE64"))
+            def kf = file("qns-release.jks")
+            if (kf.exists()) {
                 storeFile     kf
                 storePassword System.getenv("STORE_PASSWORD")
                 keyAlias      System.getenv("KEY_ALIAS")

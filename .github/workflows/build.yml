@@ -86,7 +86,8 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
         run: |
-          echo "$KEYSTORE_BASE64" | base64 --decode > app/qns-release.jks
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > app/qns-release.jks
+          test -s app/qns-release.jks
           ./gradlew assembleRelease
       - name: Upload release APK
         if: steps.signing.outputs.enabled == 'true'
