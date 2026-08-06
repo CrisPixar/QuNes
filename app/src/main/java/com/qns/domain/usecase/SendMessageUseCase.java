@@ -7,8 +7,8 @@ public class SendMessageUseCase {
     private final WebSocketClient ws;
     @Inject public SendMessageUseCase(WebSocketClient ws) { this.ws = ws; }
 
-    public void execute(String chatId, String encryptedPayload, String ratchetHeader, String signature) {
+    public void execute(String chatId, String clientMessageId, String encryptedPayload, String ratchetHeader, String signature) {
         if (chatId == null || encryptedPayload == null) return;
-        ws.sendMessage(chatId, encryptedPayload, ratchetHeader, signature);
+        ws.sendMessage(chatId, clientMessageId, encryptedPayload, ratchetHeader, signature);
     }
 }

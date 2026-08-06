@@ -26,6 +26,7 @@ public class SettingsViewModel extends ViewModel {
     public final MutableLiveData<List<SessionInfo>> sessions = new MutableLiveData<>(new ArrayList<>());
     public final MutableLiveData<Boolean> sessionsLoading = new MutableLiveData<>(false);
     public final MutableLiveData<String> error = new MutableLiveData<>();
+    public final MutableLiveData<Boolean> reconnecting = new MutableLiveData<>(false);
 
     @Inject
     public SettingsViewModel(AuthRepository repository, ThemeRepository themeRepository) {
@@ -42,6 +43,14 @@ public class SettingsViewModel extends ViewModel {
         bag.add(repository.logout()
             .observeOn(AndroidSchedulers.mainThread())
             .subscribe(() -> loggedOut.setValue(true), value -> error.setValue(value.getMessage())));
+    }
+
+    public void reconnect() {
+        reconnecting.setValue(true);
+        bag.add(repository.restoreSession().observeOn(AndroidSchedulers.mainThread()).subscribe(() -> reconnecting.setValue(false), value -> {
+            reconnecting.setValue(false);
+            error.setValue("Не удалось переподключиться");
+        }));
     }
 
     public void loadSessions() {

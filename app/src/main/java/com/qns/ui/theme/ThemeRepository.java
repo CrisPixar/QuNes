@@ -24,7 +24,7 @@ public final class ThemeRepository {
     }
 
     public void setMode(String value) {
-        String normalized = "dark".equals(value) || "light".equals(value) ? value : "system";
+        String normalized = "dark".equals(value) || "light".equals(value) || "furry".equals(value) ? value : "system";
         prefs.edit().putString(KEY_MODE, normalized).apply();
         mode.postValue(normalized);
     }

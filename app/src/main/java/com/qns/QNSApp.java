@@ -10,5 +10,6 @@ public class QNSApp extends Application {
         super.onCreate();
         // Загружаем нативные библиотеки SQLCipher
         net.sqlcipher.database.SQLiteDatabase.loadLibs(this);
+        com.qns.utils.CrashReporter.install(this);
     }
 }

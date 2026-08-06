@@ -10,6 +10,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 
 import com.qns.ui.navigation.NavGraph
@@ -27,9 +30,16 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val crashReporter = com.qns.utils.CrashReporter.install(this)
         setContent {
             val mode by themeRepository.mode.observeAsState("system")
-            QNSTheme(mode = mode) { NavGraph() }
+            var showCrash by remember { mutableStateOf(crashReporter.hasReport()) }
+            QNSTheme(mode = mode) {
+                if (showCrash) CrashReportScreen(crashReporter.read()) {
+                    crashReporter.clear()
+                    showCrash = false
+                } else NavGraph()
+            }
         }
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 700)

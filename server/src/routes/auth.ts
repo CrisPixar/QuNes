@@ -54,11 +54,13 @@ export async function handleRegister(req: Request): Promise<Response> {
       }
     }
     if (Array.isArray(publicKeys.one_time_prekeys)) {
-      for (const key of publicKeys.one_time_prekeys.slice(0, 100)) {
+      for (const value of publicKeys.one_time_prekeys.slice(0, 100)) {
+        const key = typeof value === "string" ? value : value?.key;
+        const id = typeof value === "object" && isSafeKey(value?.id, 128) ? value.id : generateId();
         if (isSafeKey(key, MAX_PUBLIC_KEY_SIZE)) {
           db.run(
             "INSERT INTO user_keys (id,user_id,key_type,public_key,created_at) VALUES (?,?,'one_time_prekey',?,?)",
-            [generateId(), userId, key, now],
+            [id, userId, key, now],
           );
         }
       }
@@ -77,7 +79,7 @@ export async function handleLogin(req: Request): Promise<Response> {
 
   const db = getDB();
   const user = db.query(
-    "SELECT id, username, password_hash, role, is_scam FROM users WHERE username = ? COLLATE NOCASE",
+    "SELECT id, username, password_hash, role, is_root_admin, is_verified, is_beta_tester, is_scam FROM users WHERE username = ? COLLATE NOCASE",
   ).get(username) as any;
 
   if (!user) {
@@ -102,7 +104,7 @@ export async function handleLogin(req: Request): Promise<Response> {
   return json({
     accessToken,
     refreshToken,
-    user: { id: user.id, username: user.username, role: user.role, isScam: user.is_scam === 1 },
+    user: { id: user.id, username: user.username, role: user.role, isRootAdmin: user.is_root_admin === 1, isVerified: user.is_verified === 1, isBetaTester: user.is_beta_tester === 1, isScam: user.is_scam === 1 },
   });
 }
 

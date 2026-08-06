@@ -142,6 +142,8 @@ function handleMessage(ws: any, data: WsData, message: Record<string, any>): voi
   const ratchetHeader = typeof message.ratchetHeader === "string" ? message.ratchetHeader : null;
   const signature = typeof message.signature === "string" ? message.signature : null;
   const nonce = typeof message.nonce === "string" ? message.nonce : null;
+  const clientMessageId = typeof message.clientMessageId === "string" && message.clientMessageId.length <= 128 ? message.clientMessageId : null;
+  const protocolVersion = message.protocolVersion === 2 ? 2 : 1;
   if (!chatId || !encryptedPayload) {
     ws.send(JSON.stringify({ type: "error", message: "chatId and encryptedPayload required" }));
     return;
@@ -155,11 +157,19 @@ function handleMessage(ws: any, data: WsData, message: Record<string, any>): voi
     return;
   }
 
+  const db = getDB();
+  if (clientMessageId) {
+    const existing = db.query("SELECT id, created_at FROM messages WHERE sender_id = ? AND client_message_id = ?").get(data.userId, clientMessageId) as any;
+    if (existing) {
+      ws.send(JSON.stringify({ type: "message_sent", messageId: existing.id, clientMessageId, chatId, createdAt: existing.created_at, duplicate: true }));
+      return;
+    }
+  }
   const messageId = generateId();
   const createdAt = Date.now();
-  getDB().run(
-    "INSERT INTO messages (id,chat_id,sender_id,encrypted_payload,ratchet_header,signature,server_nonce,payload_size,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
-    [messageId, chatId, data.userId, encryptedPayload, ratchetHeader, signature, nonce, encryptedPayload.length, createdAt],
+  db.run(
+    "INSERT INTO messages (id,chat_id,sender_id,client_message_id,encrypted_payload,ratchet_header,signature,server_nonce,protocol_version,payload_size,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+    [messageId, chatId, data.userId, clientMessageId, encryptedPayload, ratchetHeader, signature, nonce, protocolVersion, encryptedPayload.length, createdAt],
   );
   const event = {
     type: "message",
@@ -167,6 +177,8 @@ function handleMessage(ws: any, data: WsData, message: Record<string, any>): voi
     messageId,
     chatId,
     senderId: data.userId,
+    clientMessageId,
+    protocolVersion,
     encryptedPayload,
     ratchetHeader,
     signature,
@@ -176,7 +188,7 @@ function handleMessage(ws: any, data: WsData, message: Record<string, any>): voi
     read: false,
   };
   broadcastToChat(chatId, event, data.userId);
-  ws.send(JSON.stringify({ type: "message_sent", messageId, chatId, createdAt }));
+  ws.send(JSON.stringify({ type: "message_sent", messageId, clientMessageId, chatId, createdAt }));
 }
 
 function handleRead(data: WsData, message: Record<string, any>): void {

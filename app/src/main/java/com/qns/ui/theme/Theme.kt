@@ -29,6 +29,17 @@ private val LightColors = lightColorScheme(
     error = ErrorLight,
 )
 
+private val FurryColors = lightColorScheme(
+    primary = FurryPrimary,
+    onPrimary = FurryOnPrimary,
+    primaryContainer = FurryPrimaryContainer,
+    onPrimaryContainer = FurryOnPrimaryContainer,
+    secondary = FurrySecondary,
+    background = FurryBackground,
+    surface = FurryBackground,
+    error = FurryError,
+)
+
 private val DarkColors = darkColorScheme(
     primary = PrimaryDark,
     onPrimary = OnPrimaryDark,
@@ -58,10 +69,11 @@ fun QNSTheme(
     val systemDark = isSystemInDarkTheme()
     val dark = when (mode) {
         "dark" -> true
-        "light" -> false
+        "light", "furry" -> false
         else -> systemDark
     }
     val colors = when {
+        mode == "furry" -> FurryColors
         dynamic && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)

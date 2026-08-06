@@ -99,10 +99,11 @@ public class WebSocketClient {
         connection.onNext(false);
     }
 
-    public void sendMessage(String chatId, String encryptedPayload, String ratchetHeader, String signature) {
+    public void sendMessage(String chatId, String clientMessageId, String encryptedPayload, String ratchetHeader, String signature) {
         sendRaw(Map.of(
             "type", "message",
             "chatId", chatId,
+            "clientMessageId", clientMessageId == null ? "" : clientMessageId,
             "encryptedPayload", encryptedPayload,
             "ratchetHeader", ratchetHeader == null ? "" : ratchetHeader,
             "signature", signature == null ? "" : signature

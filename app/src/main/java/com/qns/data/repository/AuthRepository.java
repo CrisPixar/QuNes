@@ -9,6 +9,7 @@ import androidx.datastore.preferences.rxjava3.RxPreferenceDataStoreBuilder;
 import androidx.datastore.rxjava3.RxDataStore;
 
 import com.qns.data.crypto.IdentityStore;
+import com.qns.data.local.AppDatabase;
 import com.qns.data.remote.ApiService;
 import com.qns.data.remote.ServerRepository;
 import com.qns.data.remote.TokenStore;
@@ -39,6 +40,7 @@ public class AuthRepository {
     private final WebSocketClient webSocket;
     private final TokenStore tokenStore;
     private final IdentityStore identityStore;
+    private final AppDatabase database;
     private final RxDataStore<Preferences> dataStore;
 
     @Inject
@@ -48,6 +50,7 @@ public class AuthRepository {
         WebSocketClient webSocket,
         TokenStore tokenStore,
         IdentityStore identityStore,
+        AppDatabase database,
         @ApplicationContext Context context
     ) {
         this.api = api;
@@ -55,6 +58,7 @@ public class AuthRepository {
         this.webSocket = webSocket;
         this.tokenStore = tokenStore;
         this.identityStore = identityStore;
+        this.database = database;
         this.dataStore = new RxPreferenceDataStoreBuilder(context, "qns_prefs").build();
         this.dataStore.data().subscribe(
             preferences -> tokenStore.set(preferences.get(PreferencesKeys.stringKey(Constants.PREF_ACCESS_TOKEN))),
@@ -102,7 +106,7 @@ public class AuthRepository {
                     servers.current().api("api/auth/logout"),
                     Map.of("refreshToken", refresh)
                 ).onErrorReturnItem(Map.of());
-            return request.ignoreElement().andThen(clearLocalSession());
+            return request.ignoreElement().andThen(clearLocalUserDataOnLogout()).andThen(clearLocalSession());
         }).subscribeOn(Schedulers.io());
     }
 
@@ -118,6 +122,10 @@ public class AuthRepository {
             String role = preferences.get(PreferencesKeys.stringKey(Constants.PREF_USER_ROLE));
             return role == null ? "user" : role;
         });
+    }
+
+    public Flowable<Boolean> observeBetaTester() {
+        return dataStore.data().map(preferences -> Boolean.TRUE.equals(preferences.get(PreferencesKeys.booleanKey(Constants.PREF_BETA_TESTER))));
     }
 
     public Single<String> getAccessToken() {
@@ -151,6 +159,13 @@ public class AuthRepository {
             })
             .ignoreElement()
             .subscribeOn(Schedulers.io());
+    }
+
+    public Single<String> getCurrentUserId() {
+        return dataStore.data().firstOrError().map(preferences -> {
+            String value = preferences.get(PreferencesKeys.stringKey(Constants.PREF_USER_ID));
+            return value == null ? "" : value;
+        });
     }
 
     public Single<String> getRefreshToken() {
@@ -216,9 +231,17 @@ public class AuthRepository {
                     PreferencesKeys.stringKey(Constants.PREF_USER_ROLE),
                     response.user.role == null ? "user" : response.user.role
                 );
+                mutable.set(PreferencesKeys.booleanKey(Constants.PREF_BETA_TESTER), response.user.isBetaTester);
             }
             return Single.just(mutable);
         }).ignoreElement();
+    }
+
+    public Completable clearLocalUserDataOnLogout() {
+        return database.messageDao().clearAll()
+            .andThen(database.chatDao().clearAll())
+            .andThen(database.ratchetSessionDao().clearAll())
+            .subscribeOn(Schedulers.io());
     }
 
     private Completable clearLocalSession() {
@@ -231,6 +254,7 @@ public class AuthRepository {
             mutable.remove(PreferencesKeys.stringKey(Constants.PREF_USER_ID));
             mutable.remove(PreferencesKeys.stringKey(Constants.PREF_USERNAME));
             mutable.remove(PreferencesKeys.stringKey(Constants.PREF_USER_ROLE));
+            mutable.remove(PreferencesKeys.booleanKey(Constants.PREF_BETA_TESTER));
             return Single.just(mutable);
         }).ignoreElement();
     }

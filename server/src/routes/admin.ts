@@ -16,6 +16,8 @@ export function handleAdminStats(req: Request): Response {
     totalMessages: count(db, "SELECT COUNT(*) as count FROM messages WHERE deleted = 0"),
     totalChats: count(db, "SELECT COUNT(*) as count FROM chats"),
     scamUsers: count(db, "SELECT COUNT(*) as count FROM users WHERE is_scam = 1"),
+    verifiedUsers: count(db, "SELECT COUNT(*) as count FROM users WHERE is_verified = 1"),
+    betaTesters: count(db, "SELECT COUNT(*) as count FROM users WHERE is_beta_tester = 1"),
     activeSessions: count(db, "SELECT COUNT(*) as count FROM refresh_tokens WHERE revoked = 0 AND expires_at > ?", Date.now()),
     activeWs: count(db, "SELECT COUNT(*) as count FROM ws_sessions"),
     uptime: process.uptime(),
@@ -34,7 +36,7 @@ export function handleAdminGetUsers(req: Request): Response {
   const limit = Number.isInteger(limitValue) && limitValue > 0 ? Math.min(limitValue, 100) : 50;
   const db = getDB();
   const users = db.query(`
-    SELECT u.id, u.username, u.role, u.is_scam, u.scam_reason, u.last_ip, u.last_seen, u.created_at,
+    SELECT u.id, u.username, u.role, u.is_root_admin, u.is_verified, u.is_beta_tester, u.is_scam, u.scam_reason, u.last_ip, u.last_seen, u.created_at,
       (SELECT COUNT(*) FROM refresh_tokens rt WHERE rt.user_id = u.id AND rt.revoked = 0 AND rt.expires_at > ?) as active_sessions,
       (SELECT COUNT(*) FROM messages m WHERE m.sender_id = u.id AND m.deleted = 0) as message_count
     FROM users u
@@ -48,6 +50,9 @@ export function handleAdminGetUsers(req: Request): Response {
       id: user.id,
       username: user.username,
       role: user.role,
+      isRootAdmin: user.is_root_admin === 1,
+      isVerified: user.is_verified === 1,
+      isBetaTester: user.is_beta_tester === 1,
       isScam: user.is_scam === 1,
       scamReason: user.scam_reason,
       lastIp: user.last_ip,
@@ -67,7 +72,7 @@ export function handleAdminGetUser(req: Request, userId: string): Response {
   if (auth instanceof Response) return auth;
   const db = getDB();
   const user = db.query(
-    "SELECT id, username, role, is_scam, scam_reason, last_ip, last_seen, created_at FROM users WHERE id = ?",
+    "SELECT id, username, role, is_root_admin, is_verified, is_beta_tester, is_scam, scam_reason, last_ip, last_seen, created_at FROM users WHERE id = ?",
   ).get(userId) as any;
   if (!user) return json({ error: "User not found" }, 404);
   const sessions = db.query(
@@ -77,7 +82,7 @@ export function handleAdminGetUser(req: Request, userId: string): Response {
     "SELECT id, ip_address, user_agent, connected_at FROM ws_sessions WHERE user_id = ?",
   ).all(userId) as any[];
   return json({
-    user: { ...user, isScam: user.is_scam === 1, scamReason: user.scam_reason },
+    user: { ...user, isRootAdmin: user.is_root_admin === 1, isVerified: user.is_verified === 1, isBetaTester: user.is_beta_tester === 1, isScam: user.is_scam === 1, scamReason: user.scam_reason },
     sessions,
     wsConnections: connections,
   });
@@ -89,7 +94,8 @@ export async function handleAdminUpdateUser(req: Request, userId: string): Promi
   const body = await req.json().catch(() => null);
   if (!body) return json({ error: "Invalid JSON" }, 400);
   const db = getDB();
-  if (!db.query("SELECT id FROM users WHERE id = ?").get(userId)) return json({ error: "User not found" }, 404);
+  const target = db.query("SELECT id, is_root_admin FROM users WHERE id = ?").get(userId) as any;
+  if (!target) return json({ error: "User not found" }, 404);
 
   const updates: string[] = [];
   const values: any[] = [];
@@ -110,9 +116,20 @@ export async function handleAdminUpdateUser(req: Request, userId: string): Promi
   }
   if (body.role !== undefined) {
     if (!['user', 'admin'].includes(body.role)) return json({ error: "Invalid role" }, 400);
+    if (target.is_root_admin === 1 && body.role !== "admin") return json({ error: "Root admin is protected" }, 403);
     if (userId === auth.userId && body.role !== "admin") return json({ error: "You cannot remove your own admin role" }, 400);
     updates.push("role = ?");
     values.push(body.role);
+  }
+  if (body.isVerified !== undefined) {
+    if (typeof body.isVerified !== "boolean") return json({ error: "Invalid verified flag" }, 400);
+    updates.push("is_verified = ?");
+    values.push(body.isVerified ? 1 : 0);
+  }
+  if (body.isBetaTester !== undefined) {
+    if (typeof body.isBetaTester !== "boolean") return json({ error: "Invalid beta tester flag" }, 400);
+    updates.push("is_beta_tester = ?");
+    values.push(body.isBetaTester ? 1 : 0);
   }
   if (!updates.length) return json({ error: "Nothing to update" }, 400);
   values.push(userId);
@@ -125,8 +142,9 @@ export function handleAdminDeleteUser(req: Request, userId: string): Response {
   if (auth instanceof Response) return auth;
   if (userId === auth.userId) return json({ error: "You cannot delete your own account here" }, 400);
   const db = getDB();
-  const user = db.query("SELECT id, username FROM users WHERE id = ?").get(userId) as any;
+  const user = db.query("SELECT id, username, is_root_admin FROM users WHERE id = ?").get(userId) as any;
   if (!user) return json({ error: "User not found" }, 404);
+  if (user.is_root_admin === 1) return json({ error: "Root admin is protected" }, 403);
   db.run("DELETE FROM users WHERE id = ?", [userId]);
   return json({ message: "User deleted" });
 }
@@ -137,7 +155,9 @@ export async function handleAdminSetScam(req: Request, userId: string): Promise<
   const body = await req.json().catch(() => null);
   if (!body) return json({ error: "Invalid JSON" }, 400);
   const db = getDB();
-  if (!db.query("SELECT id FROM users WHERE id = ?").get(userId)) return json({ error: "User not found" }, 404);
+  const target = db.query("SELECT id, is_root_admin FROM users WHERE id = ?").get(userId) as any;
+  if (!target) return json({ error: "User not found" }, 404);
+  if (target.is_root_admin === 1) return json({ error: "Root admin is protected" }, 403);
   const isScam = body.isScam === true ? 1 : 0;
   const reason = isScam ? textWithin(body.reason, 512) : null;
   db.run("UPDATE users SET is_scam = ?, scam_reason = ? WHERE id = ?", [isScam, reason, userId]);
@@ -168,6 +188,9 @@ export function handleAdminDeleteAllMessages(req: Request, chatId: string): Resp
 export function handleAdminRevokeUserSessions(req: Request, userId: string): Response {
   const auth = requireAdmin(req);
   if (auth instanceof Response) return auth;
+  const target = getDB().query("SELECT is_root_admin FROM users WHERE id = ?").get(userId) as any;
+  if (!target) return json({ error: "User not found" }, 404);
+  if (target.is_root_admin === 1) return json({ error: "Root admin sessions are protected" }, 403);
   const result = getDB().run("UPDATE refresh_tokens SET revoked = 1 WHERE user_id = ?", [userId]);
   return json({ message: "All sessions revoked", count: result.changes });
 }

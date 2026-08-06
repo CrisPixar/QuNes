@@ -27,7 +27,7 @@ export function handleGetChats(req: Request): Response {
   return json(chats.map((chat) => {
     if (chat.type !== "direct") return chat;
     const other = db.query(
-      "SELECT u.id, u.username, u.last_seen, u.is_scam FROM users u JOIN chat_members cm ON cm.user_id = u.id WHERE cm.chat_id = ? AND u.id != ? LIMIT 1",
+      "SELECT u.id, u.username, u.last_seen, u.is_scam, u.scam_reason, u.is_verified FROM users u JOIN chat_members cm ON cm.user_id = u.id WHERE cm.chat_id = ? AND u.id != ? LIMIT 1",
     ).get(chat.id, auth.userId) as any;
     return {
       ...chat,
@@ -36,6 +36,8 @@ export function handleGetChats(req: Request): Response {
         username: other.username,
         lastSeen: other.last_seen,
         isScam: other.is_scam === 1,
+        scamReason: other.scam_reason ?? null,
+        isVerified: other.is_verified === 1,
       } : null,
     };
   }));
@@ -60,24 +62,27 @@ export async function handleCreateChat(req: Request): Promise<Response> {
     : [];
   if (existingUsers.length !== otherIds.length) return json({ error: "One or more users do not exist" }, 404);
 
-  if (body.type === "direct") {
-    const existing = db.query(`
-      SELECT c.id FROM chats c
-      JOIN chat_members a ON a.chat_id = c.id AND a.user_id = ?
-      JOIN chat_members b ON b.chat_id = c.id AND b.user_id = ?
-      WHERE c.type = 'direct'
-      LIMIT 1
-    `).get(auth.userId, otherIds[0]) as any;
+  const directKey = body.type === "direct" ? [auth.userId, otherIds[0]].sort().join(":") : null;
+  if (directKey) {
+    const existing = db.query("SELECT id FROM chats WHERE direct_key = ?").get(directKey) as any;
     if (existing) return json({ chatId: existing.id, existing: true });
   }
 
   const chatId = generateId();
   const now = Date.now();
   const name = body.type === "group" ? textWithin(body.name, 128) : null;
-  db.run(
-    "INSERT INTO chats (id,type,name,created_by,created_at) VALUES (?,?,?,?,?)",
-    [chatId, body.type, name, auth.userId, now],
-  );
+  try {
+    db.run(
+      "INSERT INTO chats (id,type,name,direct_key,created_by,created_at) VALUES (?,?,?,?,?,?)",
+      [chatId, body.type, name, directKey, auth.userId, now],
+    );
+  } catch (error) {
+    if (directKey) {
+      const existing = db.query("SELECT id FROM chats WHERE direct_key = ?").get(directKey) as any;
+      if (existing) return json({ chatId: existing.id, existing: true });
+    }
+    throw error;
+  }
   for (const memberId of [auth.userId, ...otherIds]) {
     db.run(
       "INSERT INTO chat_members (chat_id,user_id,joined_at) VALUES (?,?,?)",
@@ -100,8 +105,9 @@ export function handleGetMessages(req: Request, chatId: string): Response {
   const beforeRaw = params.get("before");
   const before = beforeRaw && /^\d+$/.test(beforeRaw) ? Number(beforeRaw) : null;
   const base = `
-    SELECT id, chat_id as chatId, sender_id as senderId, encrypted_payload as encryptedPayload,
-      ratchet_header as ratchetHeader, signature, created_at as createdAt, delivered, read
+    SELECT id, chat_id as chatId, sender_id as senderId, client_message_id as clientMessageId,
+      encrypted_payload as encryptedPayload, ratchet_header as ratchetHeader, signature,
+      protocol_version as protocolVersion, created_at as createdAt, delivered, read
     FROM messages WHERE chat_id = ? AND deleted = 0`;
   const rows = before
     ? db.query(`${base} AND created_at < ? ORDER BY created_at DESC LIMIT ?`).all(chatId, before, limit)

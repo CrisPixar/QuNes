@@ -5,7 +5,7 @@ public class AuthResponse {
     @SerializedName("refreshToken") public String refreshToken;
     @SerializedName("user")         public UserInfo user;
     public static class UserInfo {
-        public String id, username, role;
-        public boolean isScam;
+        public String id, username, role, scamReason;
+        public boolean isRootAdmin, isVerified, isBetaTester, isScam;
     }
 }

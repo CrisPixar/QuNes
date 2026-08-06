@@ -24,6 +24,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.qns.BuildConfig
+import com.qns.ui.DebugLogScreen
 import com.qns.ui.admin.AdminScreen
 import com.qns.ui.auth.AuthScreen
 import com.qns.ui.auth.AuthViewModel
@@ -46,6 +48,7 @@ fun NavGraph() {
     val authViewModel: AuthViewModel = hiltViewModel()
     val loggedIn by authViewModel.isLoggedIn.observeAsState(false)
     val role by authViewModel.userRole.observeAsState("user")
+    val betaTester by authViewModel.isBetaTester.observeAsState(false)
 
     NavHost(navController = navController, startDestination = if (loggedIn) Routes.MAIN else Routes.AUTH) {
         composable(Routes.AUTH) {
@@ -59,6 +62,7 @@ fun NavGraph() {
             MainScaffold(
                 navController = navController,
                 isAdmin = role == "admin",
+                showDebugLogs = BuildConfig.DEBUG && betaTester,
                 onLogout = {
                     navController.navigate(Routes.AUTH) {
                         popUpTo(Routes.MAIN) { inclusive = true }
@@ -77,7 +81,7 @@ fun NavGraph() {
 }
 
 @Composable
-private fun MainScaffold(navController: NavHostController, isAdmin: Boolean, onLogout: () -> Unit) {
+private fun MainScaffold(navController: NavHostController, isAdmin: Boolean, showDebugLogs: Boolean, onLogout: () -> Unit) {
     val inner = rememberNavController()
     val current by inner.currentBackStackEntryAsState()
     val route = current?.destination?.route
@@ -115,7 +119,8 @@ private fun MainScaffold(navController: NavHostController, isAdmin: Boolean, onL
                     )
                 }
                 composable("contacts") { ContactsScreen(onChatClick = { chatId -> navController.navigate(Routes.chat(chatId)) }) }
-                composable("settings") { SettingsScreen(onLogout, if (isAdmin) ({ navController.navigate(Routes.ADMIN) }) else null) }
+                composable("settings") { SettingsScreen(onLogout, if (isAdmin) ({ navController.navigate(Routes.ADMIN) }) else null, if (showDebugLogs) ({ inner.navigate("debug_logs") }) else null) }
+                if (showDebugLogs) composable("debug_logs") { DebugLogScreen { inner.popBackStack() } }
             }
         }
     }

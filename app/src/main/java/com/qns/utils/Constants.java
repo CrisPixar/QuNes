@@ -17,6 +17,7 @@ public final class Constants {
     public static final String PREF_USER_ID = "user_id";
     public static final String PREF_USERNAME = "username";
     public static final String PREF_USER_ROLE = "user_role";
+    public static final String PREF_BETA_TESTER = "beta_tester";
     public static final String PREF_ACCESS_TOKEN = "access_token";
     public static final String PREF_REFRESH_TOKEN = "refresh_token";
     public static final String PREF_THEME_MODE = "theme_mode";

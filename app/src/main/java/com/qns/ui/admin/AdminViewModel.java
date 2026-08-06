@@ -62,6 +62,9 @@ public class AdminViewModel extends ViewModel {
                             string(user, "id"),
                             string(user, "username"),
                             string(user, "role"),
+                            bool(user, "isRootAdmin"),
+                            bool(user, "isVerified"),
+                            bool(user, "isBetaTester"),
                             bool(user, "isScam"),
                             string(user, "lastIp"),
                             number(user, "activeSessions")
@@ -90,6 +93,20 @@ public class AdminViewModel extends ViewModel {
             )
             .subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread())
+            .subscribe(ignored -> loadData(), errorValue -> error.setValue(message(errorValue))));
+    }
+
+    public void setVerified(String id, boolean enabled) {
+        updateFlag(id, "isVerified", enabled);
+    }
+
+    public void setBetaTester(String id, boolean enabled) {
+        updateFlag(id, "isBetaTester", enabled);
+    }
+
+    private void updateFlag(String id, String key, boolean enabled) {
+        bag.add(api.updateAdminUser(servers.current().api("api/admin/users/" + id), Map.of(key, enabled))
+            .subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread())
             .subscribe(ignored -> loadData(), errorValue -> error.setValue(message(errorValue))));
     }
 
@@ -147,14 +164,20 @@ public class AdminViewModel extends ViewModel {
         public final String id;
         public final String username;
         public final String role;
+        public final boolean isRootAdmin;
+        public final boolean isVerified;
+        public final boolean isBetaTester;
         public final boolean isScam;
         public final String lastIp;
         public final long activeSessions;
 
-        public AdminUser(String id, String username, String role, boolean scam, String lastIp, long sessions) {
+        public AdminUser(String id, String username, String role, boolean root, boolean verified, boolean beta, boolean scam, String lastIp, long sessions) {
             this.id = id;
             this.username = username;
             this.role = role;
+            this.isRootAdmin = root;
+            this.isVerified = verified;
+            this.isBetaTester = beta;
             this.isScam = scam;
             this.lastIp = lastIp;
             this.activeSessions = sessions;

@@ -8,7 +8,7 @@ export function handleSearchUsers(req: Request): Response {
   const query = textWithin(new URL(req.url).searchParams.get("q"), 64);
   if (!query || query.length < 2) return json({ error: "Query must contain at least 2 characters" }, 400);
   const users = getDB().query(
-    "SELECT id, username, last_seen, is_scam, scam_reason FROM users WHERE username LIKE ? COLLATE NOCASE AND id != ? LIMIT 20",
+    "SELECT id, username, last_seen, is_scam, scam_reason, is_verified FROM users WHERE username LIKE ? COLLATE NOCASE AND id != ? LIMIT 20",
   ).all(`%${query}%`, auth.userId) as any[];
   return json(users.map((user) => ({
     id: user.id,
@@ -16,6 +16,7 @@ export function handleSearchUsers(req: Request): Response {
     lastSeen: user.last_seen,
     isScam: user.is_scam === 1,
     scamReason: user.scam_reason ?? null,
+    isVerified: user.is_verified === 1,
   })));
 }
 
@@ -23,7 +24,7 @@ export function handleGetUser(req: Request, userId: string): Response {
   const auth = requireAuth(req);
   if (auth instanceof Response) return auth;
   const user = getDB().query(
-    "SELECT id, username, last_seen, is_scam, scam_reason, created_at FROM users WHERE id = ?",
+    "SELECT id, username, last_seen, is_scam, scam_reason, is_verified, created_at FROM users WHERE id = ?",
   ).get(userId) as any;
   if (!user) return json({ error: "User not found" }, 404);
   return json({
@@ -32,6 +33,7 @@ export function handleGetUser(req: Request, userId: string): Response {
     lastSeen: user.last_seen,
     isScam: user.is_scam === 1,
     scamReason: user.scam_reason ?? null,
+    isVerified: user.is_verified === 1,
     createdAt: user.created_at,
   });
 }

@@ -5,7 +5,8 @@ import androidx.room.*;
     indices = { @Index("chatId"), @Index({"chatId","createdAt"}) })
 public class MessageEntity {
     @PrimaryKey @NonNull public String id = "";
-    public String  chatId, senderId, encryptedContent, ratchetHeader, decryptedCache;
+    public String chatId, senderId, clientMessageId, encryptedContent, ratchetHeader, decryptedCache, decryptionError;
+    public int protocolVersion = 1;
     public boolean decryptionFailed = false, delivered = false, read = false, isMine = false;
-    public long    createdAt;
+    public long createdAt;
 }

@@ -117,7 +117,12 @@ fun ChatScreen(chatId: String, onBack: () -> Unit, vm: ChatViewModel = hiltViewM
 
 @Composable
 private fun MessageBubble(message: MessageEntity) {
-    val text = message.decryptedCache ?: if (message.decryptionFailed) "Не удалось расшифровать" else "Зашифрованное сообщение"
+    val text = message.decryptedCache ?: when {
+        !message.decryptionError.isNullOrBlank() && message.decryptionError == "WAITING_FOR_SESSION" -> "Ожидается ключ сессии"
+        !message.decryptionError.isNullOrBlank() && message.decryptionError == "UNSUPPORTED_VERSION" -> "Неподдерживаемая версия сообщения"
+        message.decryptionFailed -> "Не удалось расшифровать: ${message.decryptionError ?: "ошибка ключа"}"
+        else -> "Зашифрованное сообщение"
+    }
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
         horizontalArrangement = if (message.isMine) Arrangement.End else Arrangement.Start,

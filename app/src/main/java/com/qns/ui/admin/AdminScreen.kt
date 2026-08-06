@@ -91,23 +91,27 @@ fun AdminScreen(onBack: () -> Unit, vm: AdminViewModel = hiltViewModel()) {
                     headlineContent = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(user.username)
-                            if (user.role == "admin") { Spacer(Modifier.width(4.dp)); AssistChip({}, { Text("admin", fontSize=10.sp) }) }
-                            if (user.isScam)          { Spacer(Modifier.width(4.dp)); AssistChip({}, { Text("SCAM",  fontSize=10.sp, color=ScamRed) }, colors=AssistChipDefaults.assistChipColors(containerColor=ScamRed.copy(.1f))) }
+                            if (user.role == "admin") { Spacer(Modifier.width(4.dp)); AssistChip({}, { Text(if (user.isRootAdmin) "root" else "admin", fontSize=10.sp) }) }
+                            if (user.isVerified) { Spacer(Modifier.width(4.dp)); Text("✓", color = EncryptGreen, fontSize = 16.sp) }
+                            if (user.isBetaTester) { Spacer(Modifier.width(4.dp)); Text("β", color = MaterialTheme.colorScheme.primary, fontSize = 16.sp) }
+                            if (user.isScam) { Spacer(Modifier.width(4.dp)); AssistChip({}, { Text("SCAM", fontSize=10.sp, color=ScamRed) }, colors=AssistChipDefaults.assistChipColors(containerColor=ScamRed.copy(.1f))) }
                         }
                     },
                     supportingContent = { Text("IP: ${user.lastIp ?: "?"} · Сессий: ${user.activeSessions}", fontSize=12.sp) },
                     trailingContent = {
                         Row {
-                            IconButton(onClick = { vm.setAdmin(user.id, user.role != "admin") }) {
+                            IconButton(onClick = { if (!user.isRootAdmin) vm.setAdmin(user.id, user.role != "admin") }) {
                                 Icon(Icons.Filled.ChangeHistory, null, tint = if (user.role == "admin") EncryptGreen else MaterialTheme.colorScheme.onSurfaceVariant)
                             }
+                            IconButton(onClick = { vm.setVerified(user.id, !user.isVerified) }) { Text("✓", color = if (user.isVerified) EncryptGreen else MaterialTheme.colorScheme.onSurfaceVariant) }
+                            IconButton(onClick = { vm.setBetaTester(user.id, !user.isBetaTester) }) { Text("β", color = if (user.isBetaTester) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
                             IconButton(onClick = { scamDialogUser = user }) {
                                 Icon(if (user.isScam) Icons.Filled.CheckCircle else Icons.Filled.Warning, null,
                                     tint = if (user.isScam) EncryptGreen else ScamRed)
                             }
                             // Отозвать сессии
-                            IconButton({ vm.revokeUserSessions(user.id) }) { Icon(Icons.Filled.PhoneLocked, null) }
-                            IconButton(onClick = { deleteDialogUser = user }) { Icon(Icons.Filled.Delete, null, tint = MaterialTheme.colorScheme.error) }
+                            IconButton(onClick = { if (!user.isRootAdmin) vm.revokeUserSessions(user.id) }, enabled = !user.isRootAdmin) { Icon(Icons.Filled.PhoneLocked, null) }
+                            IconButton(onClick = { if (!user.isRootAdmin) deleteDialogUser = user }, enabled = !user.isRootAdmin) { Icon(Icons.Filled.Delete, null, tint = MaterialTheme.colorScheme.error) }
                         }
                     }
                 )

@@ -1,6 +1,5 @@
 package com.qns.data.crypto;
 
-import android.util.Base64;
 import org.bouncycastle.crypto.KeyGenerationParameters;
 import org.bouncycastle.crypto.agreement.X25519Agreement;
 import org.bouncycastle.crypto.generators.HKDFBytesGenerator;
@@ -220,7 +219,7 @@ public class DoubleRatchet {
     }
 
     private static String skipKey(byte[] dhPub, int n) {
-        return Base64.encodeToString(dhPub, Base64.NO_WRAP) + ":" + n;
+        return java.util.Base64.getEncoder().withoutPadding().encodeToString(dhPub) + ":" + n;
     }
 
     // ---- Inner classes ----
@@ -262,8 +261,14 @@ public class DoubleRatchet {
             dhSendPriv!=null?dhSendPriv.clone():null,
             dhSendPub!=null?dhSendPub.clone():null,
             dhRecvPub!=null?dhRecvPub.clone():null,
-            sendN, recvN, prevN
+            copySkippedKeys(), sendN, recvN, prevN
         );
+    }
+
+    private Map<String, byte[]> copySkippedKeys() {
+        Map<String, byte[]> copy = new HashMap<>();
+        for (Map.Entry<String, byte[]> entry : skippedKeys.entrySet()) copy.put(entry.getKey(), entry.getValue().clone());
+        return copy;
     }
 
     public void importState(State s) {
@@ -277,15 +282,17 @@ public class DoubleRatchet {
         dhSendPriv=s.dhSendPriv!=null?s.dhSendPriv.clone():null;
         dhSendPub=s.dhSendPub!=null?s.dhSendPub.clone():null;
         dhRecvPub=s.dhRecvPub!=null?s.dhRecvPub.clone():null;
+        if (s.skippedKeys != null) for (Map.Entry<String, byte[]> entry : s.skippedKeys.entrySet()) skippedKeys.put(entry.getKey(), entry.getValue().clone());
         sendN=s.sendN; recvN=s.recvN; prevN=s.prevN;
     }
 
     public static class State {
         public byte[] rootKey,sendChainKey,recvChainKey,dhSendPriv,dhSendPub,dhRecvPub;
+        public Map<String, byte[]> skippedKeys;
         public int sendN,recvN,prevN;
-        public State(byte[] rk,byte[] sck,byte[] rck,byte[] dsp,byte[] dspub,byte[] drp,int sn,int rn,int pn){
+        public State(byte[] rk,byte[] sck,byte[] rck,byte[] dsp,byte[] dspub,byte[] drp,Map<String, byte[]> skipped,int sn,int rn,int pn){
             rootKey=rk;sendChainKey=sck;recvChainKey=rck;dhSendPriv=dsp;
-            dhSendPub=dspub;dhRecvPub=drp;sendN=sn;recvN=rn;prevN=pn;
+            dhSendPub=dspub;dhRecvPub=drp;skippedKeys=skipped;sendN=sn;recvN=rn;prevN=pn;
         }
     }
 }

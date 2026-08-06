@@ -73,6 +73,16 @@ export async function handleUploadIdentityKeys(req: Request): Promise<Response> 
     );
     uploaded++;
   }
+  const prekeys = Array.isArray(publicKeys.one_time_prekeys) ? publicKeys.one_time_prekeys.slice(0, MAX_PREKEYS) : [];
+  for (const value of prekeys) {
+    const key = typeof value === "string" ? value : value?.key;
+    const id = typeof value === "object" && isSafeKey(value?.id, 128) ? value.id : generateId();
+    if (!isSafeKey(key, MAX_KEY_SIZE)) continue;
+    if (!db.query("SELECT id FROM user_keys WHERE id = ?").get(id)) {
+      db.run("INSERT INTO user_keys (id,user_id,key_type,public_key,created_at) VALUES (?,?,'one_time_prekey',?,?)", [id, auth.userId, key, Date.now()]);
+      uploaded++;
+    }
+  }
   if (!uploaded) return json({ error: "No valid identity keys" }, 400);
   return json({ uploaded });
 }
@@ -84,7 +94,7 @@ export function handleGetKeyBundle(req: Request, targetId: string): Response {
   if (!db.query("SELECT id FROM users WHERE id = ?").get(targetId)) return json({ error: "User not found" }, 404);
 
   const keys = db.query(
-    "SELECT key_type, public_key, signature FROM user_keys WHERE user_id = ? AND key_type != 'one_time_prekey'",
+    "SELECT id, key_type, public_key, signature FROM user_keys WHERE user_id = ? AND key_type != 'one_time_prekey'",
   ).all(targetId) as any[];
   const oneTime = db.query(
     "SELECT id, public_key FROM user_keys WHERE user_id = ? AND key_type = 'one_time_prekey' AND used = 0 LIMIT 1",
@@ -92,7 +102,7 @@ export function handleGetKeyBundle(req: Request, targetId: string): Response {
   if (oneTime) db.run("UPDATE user_keys SET used = 1 WHERE id = ?", [oneTime.id]);
 
   const bundle: Record<string, unknown> = {};
-  for (const key of keys) bundle[key.key_type] = { publicKey: key.public_key, signature: key.signature };
+  for (const key of keys) bundle[key.key_type] = { id: key.id, publicKey: key.public_key, signature: key.signature };
   if (oneTime) bundle.one_time_prekey = { id: oneTime.id, publicKey: oneTime.public_key };
 
   const remaining = (db.query(

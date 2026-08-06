@@ -14,12 +14,12 @@ if (!ADMIN_PASSWORD || ADMIN_PASSWORD.length < 12) {
 const db = getDB();
 const existing = db.query("SELECT id FROM users WHERE username = ?").get(ADMIN_USERNAME) as any;
 if (existing) {
-  db.run("UPDATE users SET role = 'admin', password_hash = ? WHERE username = ?",
+  db.run("UPDATE users SET role = 'admin', is_root_admin = 1, password_hash = ? WHERE username = ?",
     [await hashPassword(ADMIN_PASSWORD), ADMIN_USERNAME]);
   console.log(`✅  Admin updated: ${ADMIN_USERNAME}`);
 } else {
   const id = generateId();
-  db.run("INSERT INTO users (id,username,password_hash,role,created_at) VALUES (?,?,?,'admin',?)",
+  db.run("INSERT INTO users (id,username,password_hash,role,is_root_admin,created_at) VALUES (?,?,?,'admin',1,?)",
     [id, ADMIN_USERNAME, await hashPassword(ADMIN_PASSWORD), Date.now()]);
   console.log(`✅  Admin created: ${ADMIN_USERNAME}  (id: ${id})`);
 }

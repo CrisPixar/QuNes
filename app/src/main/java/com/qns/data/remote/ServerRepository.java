@@ -1,6 +1,8 @@
 package com.qns.data.remote;
 
 import android.content.Context;
+
+import com.qns.BuildConfig;
 import android.content.SharedPreferences;
 
 import org.json.JSONArray;
@@ -30,9 +32,11 @@ public final class ServerRepository {
 
     public synchronized List<ServerProfile> getServers() {
         List<ServerProfile> result = new ArrayList<>();
-        result.add(new ServerProfile("device", "Этот телефон", "http://127.0.0.1:3000/", "ws://127.0.0.1:3000/ws", false));
-        result.add(new ServerProfile("local", "Эмулятор Android", "http://10.0.2.2:3000/", "ws://10.0.2.2:3000/ws", false));
-        result.add(new ServerProfile("template", "Облачный сервер", "https://your-qns-server.com/", "wss://your-qns-server.com/ws", false));
+        if (BuildConfig.DEBUG) {
+            result.add(new ServerProfile("device", "Этот телефон", "http://127.0.0.1:3000/", "ws://127.0.0.1:3000/ws", false));
+            result.add(new ServerProfile("local", "Эмулятор Android", "http://10.0.2.2:3000/", "ws://10.0.2.2:3000/ws", false));
+        }
+        result.add(new ServerProfile("production", "Main Quantum Server", "https://mainquantumserver.onrender.com/", "wss://mainquantumserver.onrender.com/ws", false));
         String raw = prefs.getString(KEY_CUSTOM, "[]");
         try {
             JSONArray array = new JSONArray(raw);
@@ -53,7 +57,7 @@ public final class ServerRepository {
     }
 
     public synchronized ServerProfile current() {
-        String active = prefs.getString(KEY_ACTIVE, "local");
+        String active = prefs.getString(KEY_ACTIVE, BuildConfig.DEBUG ? "local" : "production");
         for (ServerProfile profile : getServers()) {
             if (profile.id.equals(active)) return profile;
         }
@@ -77,6 +81,7 @@ public final class ServerRepository {
         String cleanUrl = baseUrl == null ? "" : baseUrl.trim();
         if (cleanName.length() < 2 || cleanName.length() > 40) throw new IllegalArgumentException("Название сервера: 2-40 символов");
         if (!ServerProfile.isValid(cleanUrl)) throw new IllegalArgumentException("Укажите корректный URL http или https");
+        if (!BuildConfig.DEBUG && cleanUrl.toLowerCase().startsWith("http://")) throw new IllegalArgumentException("В release разрешён только HTTPS");
         String ws = cleanUrl.replaceFirst("^http", "ws");
         ServerProfile profile = new ServerProfile(UUID.randomUUID().toString(), cleanName, cleanUrl, ws + (ws.endsWith("/") ? "ws" : "/ws"), true);
         JSONArray array;
@@ -109,8 +114,8 @@ public final class ServerRepository {
             }
         } catch (Exception ignored) {
         }
-        String active = prefs.getString(KEY_ACTIVE, "local");
-        if (id.equals(active)) active = "local";
+        String active = prefs.getString(KEY_ACTIVE, BuildConfig.DEBUG ? "local" : "production");
+        if (id.equals(active)) active = BuildConfig.DEBUG ? "local" : "production";
         prefs.edit().putString(KEY_CUSTOM, result.toString()).putString(KEY_ACTIVE, active).apply();
     }
 }

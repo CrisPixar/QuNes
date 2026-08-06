@@ -13,10 +13,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.ChangeHistory
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.AlertDialog
@@ -52,11 +54,13 @@ import com.qns.data.remote.model.SessionInfo
 fun SettingsScreen(
     onLogout: () -> Unit,
     onAdminPanel: (() -> Unit)?,
+    onDebugLogs: (() -> Unit)? = null,
     vm: SettingsViewModel = hiltViewModel(),
 ) {
     val loggedOut by vm.loggedOut.observeAsState()
     val error by vm.error.observeAsState()
     val themeMode by vm.themeMode.observeAsState("system")
+    val reconnecting by vm.reconnecting.observeAsState(false)
     LaunchedEffect(loggedOut) { if (loggedOut == true) onLogout() }
 
     var themeDialog by remember { mutableStateOf(false) }
@@ -89,6 +93,8 @@ fun SettingsScreen(
             item { SettingsItem(Icons.Filled.Key, "Ключи шифрования", "Просмотр состояния ключей") { keysDialog = true } }
             item { SettingsItem(Icons.Filled.Devices, "Активные сессии", "Управление устройствами") { sessionsDialog = true; vm.loadSessions() } }
             item { SettingsItem(Icons.Filled.Security, "Уровень защиты", "TLS и состояние ключей") { securityDialog = true } }
+            item { SettingsItem(Icons.Filled.Refresh, "Переподключиться", if (reconnecting) "Проверяю сессию..." else "Проверить сервер и WebSocket") { if (!reconnecting) vm.reconnect() } }
+            if (onDebugLogs != null) item { SettingsItem(Icons.Filled.BugReport, "Debug logs", "Только для beta tester") { onDebugLogs() } }
             if (onAdminPanel != null) item {
                 SettingsItem(Icons.Filled.ChangeHistory, "Панель администратора", "Пользователи, SCAM и сессии", onAdminPanel)
             }
@@ -131,7 +137,7 @@ private fun ThemeDialog(vm: SettingsViewModel, currentMode: String, onClose: () 
         title = { Text("Тема приложения") },
         text = {
             Column {
-                listOf("system" to "Системная", "light" to "Светлая", "dark" to "Тёмная").forEach { (id, label) ->
+                listOf("system" to "Системная", "light" to "Светлая", "dark" to "Тёмная", "furry" to "Furry Pink").forEach { (id, label) ->
                     Row(Modifier.fillMaxWidth().clickable { selected = id }, verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = selected == id, onClick = { selected = id })
                         Text(label)

@@ -4,8 +4,8 @@ import androidx.room.*;
 @Entity(tableName = "chats")
 public class ChatEntity {
     @PrimaryKey @NonNull public String id = "";
-    public String  type, name, otherUserId, otherUsername;
-    public long    lastMessageAt, createdAt;
-    public boolean otherUserOnline = false, otherUserScam = false;
+    public String type, name, otherUserId, otherUsername, otherUserScamReason;
+    public long lastMessageAt, createdAt;
+    public boolean otherUserOnline = false, otherUserScam = false, otherUserVerified = false;
     public int     unreadCount = 0;
 }

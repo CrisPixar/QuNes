@@ -13,4 +13,5 @@ public interface ChatDao {
     @Query("UPDATE chats SET unreadCount = unreadCount + 1 WHERE id = :id") Completable incUnread(String id);
     @Query("UPDATE chats SET unreadCount = 0 WHERE id = :id") Completable clearUnread(String id);
     @Query("DELETE FROM chats WHERE id = :id") Completable delete(String id);
+    @Query("DELETE FROM chats") Completable clearAll();
 }

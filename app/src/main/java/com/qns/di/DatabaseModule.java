@@ -9,6 +9,7 @@ import android.util.Base64;
 import com.qns.data.local.AppDatabase;
 import com.qns.data.local.dao.ChatDao;
 import com.qns.data.local.dao.MessageDao;
+import com.qns.data.local.dao.RatchetSessionDao;
 import com.qns.utils.Constants;
 
 import java.nio.charset.StandardCharsets;
@@ -48,6 +49,11 @@ public class DatabaseModule {
     @Provides
     MessageDao provideMessageDao(AppDatabase database) {
         return database.messageDao();
+    }
+
+    @Provides
+    RatchetSessionDao provideRatchetSessionDao(AppDatabase database) {
+        return database.ratchetSessionDao();
     }
 
     private static byte[] databasePassphrase(Context context) {

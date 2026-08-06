@@ -31,6 +31,52 @@ public final class X3DH {
         public InitResult(byte[] sk, byte[] epk) { this.sharedSecret = sk; this.ephemeralPublicKey = epk; }
     }
 
+    public static InitResult senderInitV2(
+        byte[] aliceIdentityPrivate,
+        byte[] bobIdentityPublic,
+        byte[] bobSignedPrePublic,
+        byte[] bobOneTimePrePublic
+    ) throws Exception {
+        AsymmetricCipherKeyPair ephemeral = generateX25519Pair();
+        X25519PrivateKeyParameters ephemeralPrivate = (X25519PrivateKeyParameters) ephemeral.getPrivate();
+        X25519PublicKeyParameters ephemeralPublic = (X25519PublicKeyParameters) ephemeral.getPublic();
+        byte[] dh1 = x25519(aliceIdentityPrivate, bobSignedPrePublic);
+        byte[] dh2 = x25519(ephemeralPrivate.getEncoded(), bobIdentityPublic);
+        byte[] dh3 = x25519(ephemeralPrivate.getEncoded(), bobSignedPrePublic);
+        byte[] material = bobOneTimePrePublic == null
+            ? concat(dh1, dh2, dh3)
+            : concat(dh1, dh2, dh3, x25519(ephemeralPrivate.getEncoded(), bobOneTimePrePublic));
+        byte[] shared = hkdfV2(material, 32);
+        Arrays.fill(dh1, (byte) 0); Arrays.fill(dh2, (byte) 0); Arrays.fill(dh3, (byte) 0); Arrays.fill(material, (byte) 0);
+        return new InitResult(shared, ephemeralPublic.getEncoded());
+    }
+
+    public static byte[] receiverRespondV2(
+        byte[] bobIdentityPrivate,
+        byte[] bobSignedPrePrivate,
+        byte[] bobOneTimePrePrivate,
+        byte[] aliceIdentityPublic,
+        byte[] aliceEphemeralPublic
+    ) throws Exception {
+        byte[] dh1 = x25519(bobSignedPrePrivate, aliceIdentityPublic);
+        byte[] dh2 = x25519(bobIdentityPrivate, aliceEphemeralPublic);
+        byte[] dh3 = x25519(bobSignedPrePrivate, aliceEphemeralPublic);
+        byte[] material = bobOneTimePrePrivate == null
+            ? concat(dh1, dh2, dh3)
+            : concat(dh1, dh2, dh3, x25519(bobOneTimePrePrivate, aliceEphemeralPublic));
+        byte[] shared = hkdfV2(material, 32);
+        Arrays.fill(dh1, (byte) 0); Arrays.fill(dh2, (byte) 0); Arrays.fill(dh3, (byte) 0); Arrays.fill(material, (byte) 0);
+        return shared;
+    }
+
+    private static byte[] hkdfV2(byte[] material, int length) {
+        HKDFBytesGenerator hkdf = new HKDFBytesGenerator(new SHA256Digest());
+        hkdf.init(new HKDFParameters(material, new byte[32], CryptoConstants.HKDF_INFO_SESSION));
+        byte[] output = new byte[length];
+        hkdf.generateBytes(output, 0, output.length);
+        return output;
+    }
+
     /** Alice инициирует сессию. */
     public static InitResult senderInit(
         byte[] aliceIdentityPrivate,
