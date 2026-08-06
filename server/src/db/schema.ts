@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS users (
   role          TEXT NOT NULL DEFAULT 'user',  -- 'user' | 'admin'
   is_scam       INTEGER NOT NULL DEFAULT 0,
   scam_reason   TEXT,
+  is_root_admin INTEGER NOT NULL DEFAULT 0,
+  is_verified   INTEGER NOT NULL DEFAULT 0,
+  is_beta_tester INTEGER NOT NULL DEFAULT 0,
   last_ip       TEXT,
   last_seen     INTEGER,
   created_at    INTEGER NOT NULL
@@ -67,7 +70,8 @@ CREATE TABLE IF NOT EXISTS chats (
   type       TEXT NOT NULL,  -- 'direct' | 'group'
   name       TEXT,
   created_by TEXT NOT NULL REFERENCES users(id),
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  direct_key TEXT
 );
 
 CREATE TABLE IF NOT EXISTS chat_members (
@@ -91,8 +95,12 @@ CREATE TABLE IF NOT EXISTS messages (
   delivered         INTEGER NOT NULL DEFAULT 0,
   read              INTEGER NOT NULL DEFAULT 0,
   deleted           INTEGER NOT NULL DEFAULT 0,
-  deleted_by_admin  INTEGER NOT NULL DEFAULT 0
+  deleted_by_admin  INTEGER NOT NULL DEFAULT 0,
+  client_message_id TEXT,
+  protocol_version INTEGER NOT NULL DEFAULT 1
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_client_message ON messages(sender_id, client_message_id) WHERE client_message_id IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_messages_chat    ON messages(chat_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_sender  ON messages(sender_id);

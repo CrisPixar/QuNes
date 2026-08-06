@@ -18,13 +18,13 @@ export function extractAuth(req: Request): AuthContext | null {
 }
 
 export function requireAuth(req: Request): AuthContext | Response {
-  return extractAuth(req) ?? json({ error: "Unauthorized" }, 401);
+  return extractAuth(req) ?? json({ error: "Unauthorized", code: "AUTH_REQUIRED" }, 401);
 }
 
 export function requireAdmin(req: Request): AuthContext | Response {
   const context = extractAuth(req);
-  if (!context) return json({ error: "Unauthorized" }, 401);
-  if (context.role !== "admin") return json({ error: "Forbidden: admin role required" }, 403);
+  if (!context) return json({ error: "Unauthorized", code: "AUTH_REQUIRED" }, 401);
+  if (context.role !== "admin") return json({ error: "Forbidden: admin role required", code: "ADMIN_REQUIRED" }, 403);
   return context;
 }
 
