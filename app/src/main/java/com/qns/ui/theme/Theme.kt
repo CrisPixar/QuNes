@@ -48,6 +48,7 @@ private val QnsShapes = Shapes(
     extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
 )
 
+@Suppress("DEPRECATION")
 @Composable
 fun QNSTheme(
     mode: String = "system",

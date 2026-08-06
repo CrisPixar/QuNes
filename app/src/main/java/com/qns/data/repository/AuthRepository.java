@@ -80,7 +80,7 @@ public class AuthRepository {
                         servers.current().api("api/keys/identity"), body
                     ).onErrorReturnItem(Collections.<String, Object>emptyMap());
                 })
-                .andThen(Single.fromCallable(() -> {
+                .flatMap(ignored -> Single.fromCallable(() -> {
                     if (response.accessToken != null) webSocket.connect(response.accessToken);
                     return response;
                 })));

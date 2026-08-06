@@ -12,10 +12,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.ChevronRight
@@ -102,7 +102,7 @@ fun SettingsScreen(
                         contentColor = MaterialTheme.colorScheme.onErrorContainer,
                     ),
                 ) {
-                    Icon(Icons.Filled.Logout, null)
+                    Icon(Icons.AutoMirrored.Filled.Logout, null)
                     Spacer(Modifier.size(8.dp))
                     Text("Выйти")
                 }

@@ -3,7 +3,7 @@ package com.qns.ui.navigation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -88,7 +88,7 @@ private fun MainScaffold(navController: NavHostController, isAdmin: Boolean, onL
                 NavigationBarItem(
                     selected = route == "chats",
                     onClick = { inner.navigate("chats") { launchSingleTop = true; popUpTo("chats") } },
-                    icon = { Icon(Icons.Filled.Chat, null) },
+                    icon = { Icon(Icons.AutoMirrored.Filled.Chat, null) },
                     label = { Text("Чаты") },
                 )
                 NavigationBarItem(
