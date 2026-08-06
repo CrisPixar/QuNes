@@ -99,7 +99,10 @@ fun AdminScreen(onBack: () -> Unit, vm: AdminViewModel = hiltViewModel()) {
                             if (user.isScam) { Spacer(Modifier.width(4.dp)); AssistChip({}, { Text("SCAM", fontSize=10.sp, color=ScamRed) }, colors=AssistChipDefaults.assistChipColors(containerColor=ScamRed.copy(.1f))) }
                         }
                     },
-                    supportingContent = { Text("IP: ${user.lastIp ?: "?"} · Сессий: ${user.activeSessions}", fontSize=12.sp) },
+                    supportingContent = {
+                        Text("IP: ${user.lastIp ?: "?"} · Сессий: ${user.activeSessions}", fontSize=12.sp)
+                        if (user.isScam) Text("SCAM: ${user.scamReason?.ifBlank { "причина не указана" } ?: "причина не указана"}", fontSize=11.sp, color=ScamRed)
+                    },
                     trailingContent = {
                         Row {
                             IconButton(onClick = { if (!user.isRootAdmin) vm.setAdmin(user.id, user.role != "admin") }) {
@@ -107,7 +110,7 @@ fun AdminScreen(onBack: () -> Unit, vm: AdminViewModel = hiltViewModel()) {
                             }
                             IconButton(onClick = { vm.setVerified(user.id, !user.isVerified) }) { Text("✓", color = if (user.isVerified) EncryptGreen else MaterialTheme.colorScheme.onSurfaceVariant) }
                             IconButton(onClick = { vm.setBetaTester(user.id, !user.isBetaTester) }) { Text("β", color = if (user.isBetaTester) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
-                            IconButton(onClick = { scamDialogUser = user }) {
+                            IconButton(onClick = { scamDialogUser = user; scamReason = user.scamReason ?: "" }) {
                                 Icon(if (user.isScam) Icons.Filled.CheckCircle else Icons.Filled.Warning, null,
                                     tint = if (user.isScam) EncryptGreen else ScamRed)
                             }

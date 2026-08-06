@@ -28,6 +28,7 @@ public class WebSocketClient {
     private final OkHttpClient http;
     private final ServerRepository servers;
     private final NotificationHelper notifications;
+    private final AuthEvents authEvents;
     private final PublishSubject<Map<String, Object>> events = PublishSubject.create();
     private final BehaviorSubject<Boolean> connection = BehaviorSubject.createDefault(false);
     private WebSocket socket;
@@ -36,10 +37,11 @@ public class WebSocketClient {
     private boolean stopped;
 
     @Inject
-    public WebSocketClient(OkHttpClient http, ServerRepository servers, NotificationHelper notifications) {
+    public WebSocketClient(OkHttpClient http, ServerRepository servers, NotificationHelper notifications, AuthEvents authEvents) {
         this.http = http;
         this.servers = servers;
         this.notifications = notifications;
+        this.authEvents = authEvents;
     }
 
     public synchronized void connect(String accessToken) {
@@ -65,7 +67,13 @@ public class WebSocketClient {
                         connection.onNext(true);
                         Log.d(TAG, "Authenticated");
                     } else {
-                        if ("message".equals(event.get("type"))) notifications.showMessage("Новое сообщение", "Зашифрованное сообщение");
+                        if ("message".equals(event.get("type"))) notifications.showMessage("Новое сообщение", "Новое сообщение");
+                        if ("error".equals(event.get("type"))) {
+                            String errorMessage = String.valueOf(event.get("message"));
+                            if (errorMessage != null && (errorMessage.contains("Invalid token") || errorMessage.contains("Session expired"))) {
+                                authEvents.requestLogout();
+                            }
+                        }
                         events.onNext(event);
                     }
                 } catch (Exception error) {
@@ -85,6 +93,11 @@ public class WebSocketClient {
             public void onClosed(WebSocket webSocket, int code, String reason) {
                 authenticated = false;
                 connection.onNext(false);
+                // 4001 = невалидный/истёкший токен → сессия мертва, нужен logout
+                if (code == 4001) {
+                    authEvents.requestLogout();
+                    return;
+                }
                 if (!stopped) scheduleReconnect();
             }
         });

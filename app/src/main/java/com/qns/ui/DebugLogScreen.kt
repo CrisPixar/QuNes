@@ -4,6 +4,8 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,7 +25,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import com.qns.utils.DebugLogStore
+import java.io.File
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -41,6 +45,27 @@ fun DebugLogScreen(onBack: () -> Unit) {
             OutlinedButton(onClick = {
                 context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, logs) }, "Отправить лог"))
             }) { Text("Поделиться") }
+            OutlinedButton(onClick = {
+                val file = DebugLogStore.save(context, logs)
+                if (file != null) {
+                    try {
+                        val uri: Uri = FileProvider.getUriForFile(context, "com.qns.fileprovider", file)
+                        context.startActivity(Intent.createChooser(
+                            Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                putExtra(Intent.EXTRA_TEXT, "QNS logcat\n" + DebugLogStore.fileName())
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            },
+                            "Сохранить / отправить " + DebugLogStore.fileName()
+                        ))
+                    } catch (error: Exception) {
+                        Toast.makeText(context, "Не удалось поделиться файлом", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    Toast.makeText(context, "Не удалось сохранить файл", Toast.LENGTH_SHORT).show()
+                }
+            }) { Text("Сохранить файл") }
             OutlinedButton(onClick = onBack) { Text("Назад") }
         }
     }

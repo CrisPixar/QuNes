@@ -1,22 +1,29 @@
 package com.qns.ui.navigation
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -33,6 +40,7 @@ import com.qns.ui.chat.ChatScreen
 import com.qns.ui.chatlist.ChatListScreen
 import com.qns.ui.contacts.ContactsScreen
 import com.qns.ui.settings.SettingsScreen
+import com.qns.ui.theme.FurryIcon
 
 object Routes {
     const val AUTH = "auth"
@@ -49,6 +57,17 @@ fun NavGraph() {
     val loggedIn by authViewModel.isLoggedIn.observeAsState(false)
     val role by authViewModel.userRole.observeAsState("user")
     val betaTester by authViewModel.isBetaTester.observeAsState(false)
+    val forcedLogout by authViewModel.forcedLogout.observeAsState(false)
+
+    // Принудительный выход при 401/отзыве сессии.
+    LaunchedEffect(forcedLogout) {
+        if (forcedLogout) {
+            authViewModel.consumeForcedLogout()
+            navController.navigate(Routes.AUTH) {
+                popUpTo(0) { inclusive = true }
+            }
+        }
+    }
 
     NavHost(navController = navController, startDestination = if (loggedIn) Routes.MAIN else Routes.AUTH) {
         composable(Routes.AUTH) {
@@ -92,19 +111,19 @@ private fun MainScaffold(navController: NavHostController, isAdmin: Boolean, sho
                 NavigationBarItem(
                     selected = route == "chats",
                     onClick = { inner.navigate("chats") { launchSingleTop = true; popUpTo("chats") } },
-                    icon = { Icon(Icons.AutoMirrored.Filled.Chat, null) },
+                    icon = { FurryIcon("chats", Icons.AutoMirrored.Filled.Chat, null) },
                     label = { Text("Чаты") },
                 )
                 NavigationBarItem(
                     selected = route == "contacts",
                     onClick = { inner.navigate("contacts") { launchSingleTop = true } },
-                    icon = { Icon(Icons.Filled.Contacts, null) },
+                    icon = { FurryIcon("contacts", Icons.Filled.Contacts, null) },
                     label = { Text("Контакты") },
                 )
                 NavigationBarItem(
                     selected = route == "settings",
                     onClick = { inner.navigate("settings") { launchSingleTop = true } },
-                    icon = { Icon(Icons.Filled.Settings, null) },
+                    icon = { FurryIcon("settings", Icons.Filled.Settings, null) },
                     label = { Text("Настройки") },
                 )
             }
@@ -115,13 +134,38 @@ private fun MainScaffold(navController: NavHostController, isAdmin: Boolean, sho
                 composable("chats") {
                     ChatListScreen(
                         onChatClick = { navController.navigate(Routes.chat(it)) },
-                        onAdd = { inner.navigate("contacts") },
+                        onAdd = { safeNavigate(inner, "contacts") },
                     )
                 }
                 composable("contacts") { ContactsScreen(onChatClick = { chatId -> navController.navigate(Routes.chat(chatId)) }) }
-                composable("settings") { SettingsScreen(onLogout, if (isAdmin) ({ navController.navigate(Routes.ADMIN) }) else null, if (showDebugLogs) ({ inner.navigate("debug_logs") }) else null) }
+                composable("settings") { SettingsScreen(onLogout, if (isAdmin) ({ navController.navigate(Routes.ADMIN) }) else null, if (showDebugLogs) ({ safeNavigate(inner, "debug_logs") }) else null) }
                 if (showDebugLogs) composable("debug_logs") { DebugLogScreen { inner.popBackStack() } }
+                // Fallback для неизвестных маршрутов — не даём «белый экран».
+                composable("unknown") {
+                    androidx.compose.material3.Scaffold(
+                        topBar = { androidx.compose.material3.TopAppBar(title = { Text("Ошибка") }) },
+                    ) { pad ->
+                        Column(Modifier.padding(pad).fillMaxSize().padding(16.dp)) {
+                            Text("Экран не найден. Вернитесь в меню.")
+                            Spacer(Modifier.height(8.dp))
+                            Button(onClick = { inner.popBackStack() }) { Text("Назад") }
+                        }
+                    }
+                }
             }
         }
+    }
+}
+
+/** Навигация, которая не бросает исключение при отсутствии маршрута (не даёт белого экрана). */
+private fun safeNavigate(controller: NavHostController, route: String) {
+    try {
+        controller.navigate(route) {
+            launchSingleTop = true
+            popUpTo(controller.graph.findStartDestination().id) { saveState = true }
+            restoreState = true
+        }
+    } catch (error: Exception) {
+        // маршрут недоступен (например, debug-экран отключён в release) — молча игнорируем
     }
 }

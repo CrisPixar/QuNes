@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel;
 import com.qns.data.remote.ApiService;
 import com.qns.data.remote.ServerRepository;
 import com.qns.data.repository.ChatRepository;
+import com.qns.utils.ErrorMapper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +28,9 @@ public final class ContactsViewModel extends ViewModel {
     public final MutableLiveData<List<Contact>> contacts = new MutableLiveData<>(new ArrayList<>());
     public final MutableLiveData<Boolean> loading = new MutableLiveData<>(false);
     public final MutableLiveData<String> error = new MutableLiveData<>();
+
+    // Дебаунс/блокировка повторных createChat при быстрых кликах по пользователю.
+    private boolean opening = false;
 
     @Inject
     public ContactsViewModel(ApiService api, ServerRepository servers, ChatRepository chats) {
@@ -52,17 +56,23 @@ public final class ContactsViewModel extends ViewModel {
                 for (Map<String, Object> item : raw) result.add(new Contact(
                     string(item, "id"),
                     string(item, "username"),
-                    Boolean.TRUE.equals(item.get("isScam"))
+                    Boolean.TRUE.equals(item.get("isScam")),
+                    string(item, "scamReason"),
+                    Boolean.TRUE.equals(item.get("isVerified"))
                 ));
                 contacts.setValue(result);
                 loading.setValue(false);
             }, valueError -> {
                 loading.setValue(false);
-                error.setValue(valueError.getMessage());
+                error.setValue(ErrorMapper.message(valueError));
             }));
     }
 
     public void openChat(String userId, OpenChatListener listener) {
+        // Игнорируем повторные клики, пока идёт создание/открытие чата.
+        if (opening) return;
+        opening = true;
+        loading.setValue(true);
         bag.add(api.createChat(
                 servers.current().api("api/chats"),
                 Map.of("type", "direct", "memberIds", java.util.List.of(userId))
@@ -70,7 +80,15 @@ public final class ContactsViewModel extends ViewModel {
             .subscribeOn(Schedulers.io())
             .flatMap(result -> chats.syncChats().andThen(io.reactivex.rxjava3.core.Single.just(string(result, "chatId"))))
             .observeOn(AndroidSchedulers.mainThread())
-            .subscribe(listener::onOpen, value -> error.setValue(value.getMessage())));
+            .subscribe(chatId -> {
+                opening = false;
+                loading.setValue(false);
+                listener.onOpen(chatId);
+            }, value -> {
+                opening = false;
+                loading.setValue(false);
+                error.setValue(ErrorMapper.message(value));
+            }));
     }
 
     private static String string(Map<String, ?> map, String key) {
@@ -90,11 +108,15 @@ public final class ContactsViewModel extends ViewModel {
         public final String id;
         public final String username;
         public final boolean scam;
+        public final String scamReason;
+        public final boolean verified;
 
-        public Contact(String id, String username, boolean scam) {
+        public Contact(String id, String username, boolean scam, String scamReason, boolean verified) {
             this.id = id;
             this.username = username;
             this.scam = scam;
+            this.scamReason = scamReason;
+            this.verified = verified;
         }
     }
 }

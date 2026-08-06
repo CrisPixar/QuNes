@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.qns.ui.theme.EncryptGreen
 import com.qns.ui.theme.ScamRed
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -74,11 +75,22 @@ fun ContactsScreen(onChatClick: (String) -> Unit, vm: ContactsViewModel = hiltVi
                         headlineContent = {
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Text(contact.username)
+                                if (contact.verified) Text("✓", color = EncryptGreen, fontSize = 16.sp)
                                 if (contact.scam) Text("SCAM", color = ScamRed, style = MaterialTheme.typography.labelSmall)
                             }
                         },
+                        supportingContent = {
+                            if (contact.scam) {
+                                Text(
+                                    "⚠ " + (contact.scamReason.ifBlank { "Причина не указана" }),
+                                    color = ScamRed,
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                        },
                         leadingContent = { Icon(Icons.Filled.PersonSearch, null) },
-                        modifier = Modifier.clickable { vm.openChat(contact.id) { chatId -> onChatClick(chatId) } },
+                        enabled = !loading,
+                        modifier = Modifier.clickable(enabled = !loading) { vm.openChat(contact.id) { chatId -> onChatClick(chatId) } },
                     )
                     HorizontalDivider()
                 }

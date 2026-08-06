@@ -2,6 +2,7 @@ package com.qns.data.crypto;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters;
@@ -46,5 +47,126 @@ public class CryptoProtocolTest {
         assertEquals("hello", new String(receiver.decrypt(first), StandardCharsets.UTF_8));
         DoubleRatchet.EncryptedMessage reply = receiver.encrypt("world".getBytes(StandardCharsets.UTF_8));
         assertEquals("world", new String(alice.decrypt(reply), StandardCharsets.UTF_8));
+    }
+
+    @Test
+    public void x3dhMatchesWithoutOneTimePrekey() throws Exception {
+        byte[] alicePrivate = ((X25519PrivateKeyParameters) X3DH.generateX25519Pair().getPrivate()).getEncoded();
+        byte[] alicePublic   = ((X25519PublicKeyParameters) X3DH.generateX25519Pair().getPublic()).getEncoded();
+        AsymmetricCipherKeyPair bId = X3DH.generateX25519Pair();
+        AsymmetricCipherKeyPair bSp = X3DH.generateX25519Pair();
+        byte[] bIdPriv = ((X25519PrivateKeyParameters) bId.getPrivate()).getEncoded();
+        byte[] bIdPub  = ((X25519PublicKeyParameters) bId.getPublic()).getEncoded();
+        byte[] bSpPriv = ((X25519PrivateKeyParameters) bSp.getPrivate()).getEncoded();
+        byte[] bSpPub  = ((X25519PublicKeyParameters) bSp.getPublic()).getEncoded();
+
+        X3DH.InitResult sender = X3DH.senderInitV2(alicePrivate, bIdPub, bSpPub, null);
+        byte[] receiver = X3DH.receiverRespondV2(bIdPriv, bSpPriv, null, alicePublic, sender.ephemeralPublicKey);
+        assertArrayEquals(sender.sharedSecret, receiver);
+    }
+
+    @Test
+    public void doubleRatchetHandles100MessagesInSequence() throws Exception {
+        AsymmetricCipherKeyPair bob = X3DH.generateX25519Pair();
+        byte[] bobPriv = ((X25519PrivateKeyParameters) bob.getPrivate()).getEncoded();
+        byte[] bobPub  = ((X25519PublicKeyParameters) bob.getPublic()).getEncoded();
+        byte[] secret = X3DH.hkdf("seq".getBytes(StandardCharsets.UTF_8), CryptoConstants.HKDF_INFO_SESSION, 32);
+        DoubleRatchet alice = new DoubleRatchet();
+        DoubleRatchet bobR  = new DoubleRatchet();
+        alice.initAsSender(secret.clone(), bobPub);
+        bobR.initAsReceiver(secret.clone(), bobPriv, bobPub);
+        for (int i = 0; i < 100; i++) {
+            String text = "message-" + i;
+            DoubleRatchet.EncryptedMessage em = alice.encrypt(text.getBytes(StandardCharsets.UTF_8));
+            assertEquals(text, new String(bobR.decrypt(em), StandardCharsets.UTF_8));
+        }
+    }
+
+    @Test
+    public void doubleRatchetHandlesOutOfOrderMessagesViaSkippedKeys() throws Exception {
+        AsymmetricCipherKeyPair bob = X3DH.generateX25519Pair();
+        byte[] bobPriv = ((X25519PrivateKeyParameters) bob.getPrivate()).getEncoded();
+        byte[] bobPub  = ((X25519PublicKeyParameters) bob.getPublic()).getEncoded();
+        byte[] secret = X3DH.hkdf("ooo".getBytes(StandardCharsets.UTF_8), CryptoConstants.HKDF_INFO_SESSION, 32);
+        DoubleRatchet alice = new DoubleRatchet();
+        DoubleRatchet bobR  = new DoubleRatchet();
+        alice.initAsSender(secret.clone(), bobPub);
+        bobR.initAsReceiver(secret.clone(), bobPriv, bobPub);
+
+        DoubleRatchet.EncryptedMessage[] sent = new DoubleRatchet.EncryptedMessage[8];
+        for (int i = 0; i < sent.length; i++) sent[i] = alice.encrypt(("m" + i).getBytes(StandardCharsets.UTF_8));
+
+        assertEquals("m5", new String(bobR.decrypt(sent[5]), StandardCharsets.UTF_8));
+        assertEquals("m2", new String(bobR.decrypt(sent[2]), StandardCharsets.UTF_8));
+        assertEquals("m0", new String(bobR.decrypt(sent[0]), StandardCharsets.UTF_8));
+        assertEquals("m7", new String(bobR.decrypt(sent[7]), StandardCharsets.UTF_8));
+    }
+
+    @Test
+    public void doubleRatchetRejectsTamperedCiphertext() throws Exception {
+        AsymmetricCipherKeyPair bob = X3DH.generateX25519Pair();
+        byte[] bobPriv = ((X25519PrivateKeyParameters) bob.getPrivate()).getEncoded();
+        byte[] bobPub  = ((X25519PublicKeyParameters) bob.getPublic()).getEncoded();
+        byte[] secret = X3DH.hkdf("tampc".getBytes(StandardCharsets.UTF_8), CryptoConstants.HKDF_INFO_SESSION, 32);
+        DoubleRatchet alice = new DoubleRatchet();
+        DoubleRatchet bobR  = new DoubleRatchet();
+        alice.initAsSender(secret.clone(), bobPub);
+        bobR.initAsReceiver(secret.clone(), bobPriv, bobPub);
+        DoubleRatchet.EncryptedMessage em = alice.encrypt("secret".getBytes(StandardCharsets.UTF_8));
+        em.ct[em.ct.length - 1] ^= 0x01; // повредим последний байт тега
+        org.junit.Assert.assertThrows(Exception.class, () -> bobR.decrypt(em));
+    }
+
+    @Test
+    public void doubleRatchetRejectsTamperedHeader() throws Exception {
+        AsymmetricCipherKeyPair bob = X3DH.generateX25519Pair();
+        byte[] bobPriv = ((X25519PrivateKeyParameters) bob.getPrivate()).getEncoded();
+        byte[] bobPub  = ((X25519PublicKeyParameters) bob.getPublic()).getEncoded();
+        byte[] secret = X3DH.hkdf("tamph".getBytes(StandardCharsets.UTF_8), CryptoConstants.HKDF_INFO_SESSION, 32);
+        DoubleRatchet alice = new DoubleRatchet();
+        DoubleRatchet bobR  = new DoubleRatchet();
+        alice.initAsSender(secret.clone(), bobPub);
+        bobR.initAsReceiver(secret.clone(), bobPriv, bobPub);
+        DoubleRatchet.EncryptedMessage em = alice.encrypt("secret".getBytes(StandardCharsets.UTF_8));
+        DoubleRatchet.Header badHeader = new DoubleRatchet.Header(em.header.dhPub.clone(), em.header.n, em.header.prevN + 1);
+        org.junit.Assert.assertThrows(Exception.class, () -> bobR.decrypt(new DoubleRatchet.EncryptedMessage(badHeader, em.ct.clone())));
+    }
+
+    @Test
+    public void doubleRatchetReplayDoesNotBreakState() throws Exception {
+        AsymmetricCipherKeyPair bob = X3DH.generateX25519Pair();
+        byte[] bobPriv = ((X25519PrivateKeyParameters) bob.getPrivate()).getEncoded();
+        byte[] bobPub  = ((X25519PublicKeyParameters) bob.getPublic()).getEncoded();
+        byte[] secret = X3DH.hkdf("replay".getBytes(StandardCharsets.UTF_8), CryptoConstants.HKDF_INFO_SESSION, 32);
+        DoubleRatchet alice = new DoubleRatchet();
+        DoubleRatchet bobR  = new DoubleRatchet();
+        alice.initAsSender(secret.clone(), bobPub);
+        bobR.initAsReceiver(secret.clone(), bobPriv, bobPub);
+
+        DoubleRatchet.EncryptedMessage em0 = alice.encrypt("first".getBytes(StandardCharsets.UTF_8));
+        assertEquals("first", new String(bobR.decrypt(em0), StandardCharsets.UTF_8));
+        // Replay старого сообщения должен упасть, но состояние не должно ломаться.
+        org.junit.Assert.assertThrows(Exception.class, () -> bobR.decrypt(em0));
+        DoubleRatchet.EncryptedMessage em1 = alice.encrypt("second".getBytes(StandardCharsets.UTF_8));
+        assertEquals("second", new String(bobR.decrypt(em1), StandardCharsets.UTF_8));
+    }
+
+    @Test
+    public void wrongSignedPrekeySignatureRejected() throws Exception {
+        byte[] ikPrivate = new byte[32]; ikPrivate[0] = 1;
+        byte[] ikPublic = new org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters(ikPrivate, 0).generatePublicKey().getEncoded();
+        byte[] spkPublic = new byte[32]; spkPublic[0] = 2;
+        // Подпишем одним ключом, проверим другим (не подписавшим) — подпись не пройдёт.
+        org.bouncycastle.crypto.signers.Ed25519Signer signer = new org.bouncycastle.crypto.signers.Ed25519Signer();
+        signer.init(true, new org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters(ikPrivate, 0));
+        signer.update(spkPublic, 0, spkPublic.length);
+        byte[] signature = signer.generateSignature();
+
+        byte[] otherPrivate = new byte[32]; otherPrivate[0] = 3;
+        byte[] otherPublic = new org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters(otherPrivate, 0).generatePublicKey().getEncoded();
+        org.bouncycastle.crypto.signers.Ed25519Signer verifier = new org.bouncycastle.crypto.signers.Ed25519Signer();
+        verifier.init(false, new org.bouncycastle.crypto.params.Ed25519PublicKeyParameters(otherPublic, 0));
+        verifier.update(spkPublic, 0, spkPublic.length);
+        assertFalse(verifier.verifySignature(signature));
     }
 }

@@ -66,6 +66,7 @@ public class AdminViewModel extends ViewModel {
                             bool(user, "isVerified"),
                             bool(user, "isBetaTester"),
                             bool(user, "isScam"),
+                            string(user, "scamReason"),
                             string(user, "lastIp"),
                             number(user, "activeSessions")
                         ));
@@ -157,7 +158,7 @@ public class AdminViewModel extends ViewModel {
     }
 
     private static String message(Throwable error) {
-        return error.getMessage() == null ? "Ошибка запроса" : error.getMessage();
+        return com.qns.utils.ErrorMapper.message(error);
     }
 
     public static class AdminUser {
@@ -168,10 +169,11 @@ public class AdminViewModel extends ViewModel {
         public final boolean isVerified;
         public final boolean isBetaTester;
         public final boolean isScam;
+        public final String scamReason;
         public final String lastIp;
         public final long activeSessions;
 
-        public AdminUser(String id, String username, String role, boolean root, boolean verified, boolean beta, boolean scam, String lastIp, long sessions) {
+        public AdminUser(String id, String username, String role, boolean root, boolean verified, boolean beta, boolean scam, String scamReason, String lastIp, long sessions) {
             this.id = id;
             this.username = username;
             this.role = role;
@@ -179,6 +181,7 @@ public class AdminViewModel extends ViewModel {
             this.isVerified = verified;
             this.isBetaTester = beta;
             this.isScam = scam;
+            this.scamReason = scamReason;
             this.lastIp = lastIp;
             this.activeSessions = sessions;
         }

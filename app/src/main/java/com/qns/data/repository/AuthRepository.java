@@ -1,15 +1,11 @@
 package com.qns.data.repository;
 
-import android.content.Context;
-
-import androidx.datastore.preferences.core.MutablePreferences;
 import androidx.datastore.preferences.core.Preferences;
 import androidx.datastore.preferences.core.PreferencesKeys;
-import androidx.datastore.preferences.rxjava3.RxPreferenceDataStoreBuilder;
-import androidx.datastore.rxjava3.RxDataStore;
 
 import com.qns.data.crypto.IdentityStore;
 import com.qns.data.local.AppDatabase;
+import com.qns.data.local.PrefsStore;
 import com.qns.data.remote.ApiService;
 import com.qns.data.remote.ServerRepository;
 import com.qns.data.remote.TokenStore;
@@ -27,7 +23,6 @@ import java.util.Map;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
-import dagger.hilt.android.qualifiers.ApplicationContext;
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Single;
@@ -41,7 +36,7 @@ public class AuthRepository {
     private final TokenStore tokenStore;
     private final IdentityStore identityStore;
     private final AppDatabase database;
-    private final RxDataStore<Preferences> dataStore;
+    private final PrefsStore prefs;
 
     @Inject
     public AuthRepository(
@@ -51,7 +46,7 @@ public class AuthRepository {
         TokenStore tokenStore,
         IdentityStore identityStore,
         AppDatabase database,
-        @ApplicationContext Context context
+        PrefsStore prefs
     ) {
         this.api = api;
         this.servers = servers;
@@ -59,11 +54,7 @@ public class AuthRepository {
         this.tokenStore = tokenStore;
         this.identityStore = identityStore;
         this.database = database;
-        this.dataStore = new RxPreferenceDataStoreBuilder(context, "qns_prefs").build();
-        this.dataStore.data().subscribe(
-            preferences -> tokenStore.set(preferences.get(PreferencesKeys.stringKey(Constants.PREF_ACCESS_TOKEN))),
-            ignored -> tokenStore.clear()
-        );
+        this.prefs = prefs;
     }
 
     public Single<AuthResponse> login(String username, String password) {
@@ -98,7 +89,7 @@ public class AuthRepository {
     }
 
     public Completable logout() {
-        return dataStore.data().firstOrError().flatMapCompletable(preferences -> {
+        return prefs.first().flatMapCompletable(preferences -> {
             String refresh = preferences.get(PreferencesKeys.stringKey(Constants.PREF_REFRESH_TOKEN));
             Single<Map<String, String>> request = refresh == null || refresh.isEmpty()
                 ? Single.just(Map.of())
@@ -111,25 +102,25 @@ public class AuthRepository {
     }
 
     public Flowable<Boolean> observeLoggedIn() {
-        return dataStore.data().map(preferences -> {
+        return prefs.data().map(preferences -> {
             String token = preferences.get(PreferencesKeys.stringKey(Constants.PREF_ACCESS_TOKEN));
             return token != null && !token.isEmpty();
         });
     }
 
     public Flowable<String> observeRole() {
-        return dataStore.data().map(preferences -> {
+        return prefs.data().map(preferences -> {
             String role = preferences.get(PreferencesKeys.stringKey(Constants.PREF_USER_ROLE));
             return role == null ? "user" : role;
         });
     }
 
     public Flowable<Boolean> observeBetaTester() {
-        return dataStore.data().map(preferences -> Boolean.TRUE.equals(preferences.get(PreferencesKeys.booleanKey(Constants.PREF_BETA_TESTER))));
+        return prefs.data().map(preferences -> Boolean.TRUE.equals(preferences.get(PreferencesKeys.booleanKey(Constants.PREF_BETA_TESTER))));
     }
 
     public Single<String> getAccessToken() {
-        return dataStore.data().firstOrError().map(preferences -> {
+        return prefs.first().map(preferences -> {
             String token = preferences.get(PreferencesKeys.stringKey(Constants.PREF_ACCESS_TOKEN));
             return token == null ? "" : token;
         });
@@ -162,14 +153,14 @@ public class AuthRepository {
     }
 
     public Single<String> getCurrentUserId() {
-        return dataStore.data().firstOrError().map(preferences -> {
+        return prefs.first().map(preferences -> {
             String value = preferences.get(PreferencesKeys.stringKey(Constants.PREF_USER_ID));
             return value == null ? "" : value;
         });
     }
 
     public Single<String> getRefreshToken() {
-        return dataStore.data().firstOrError().map(preferences -> {
+        return prefs.first().map(preferences -> {
             String token = preferences.get(PreferencesKeys.stringKey(Constants.PREF_REFRESH_TOKEN));
             return token == null ? "" : token;
         });
@@ -216,25 +207,7 @@ public class AuthRepository {
     }
 
     private Completable saveTokens(AuthResponse response) {
-        return dataStore.updateDataAsync(preferences -> {
-            MutablePreferences mutable = preferences.toMutablePreferences();
-            if (response.accessToken != null) mutable.set(
-                PreferencesKeys.stringKey(Constants.PREF_ACCESS_TOKEN), response.accessToken);
-            if (response.refreshToken != null) mutable.set(
-                PreferencesKeys.stringKey(Constants.PREF_REFRESH_TOKEN), response.refreshToken);
-            if (response.user != null) {
-                if (response.user.id != null) mutable.set(
-                    PreferencesKeys.stringKey(Constants.PREF_USER_ID), response.user.id);
-                if (response.user.username != null) mutable.set(
-                    PreferencesKeys.stringKey(Constants.PREF_USERNAME), response.user.username);
-                mutable.set(
-                    PreferencesKeys.stringKey(Constants.PREF_USER_ROLE),
-                    response.user.role == null ? "user" : response.user.role
-                );
-                mutable.set(PreferencesKeys.booleanKey(Constants.PREF_BETA_TESTER), response.user.isBetaTester);
-            }
-            return Single.just(mutable);
-        }).ignoreElement();
+        return prefs.saveTokens(response);
     }
 
     public Completable clearLocalUserDataOnLogout() {
@@ -247,15 +220,6 @@ public class AuthRepository {
     private Completable clearLocalSession() {
         tokenStore.clear();
         webSocket.disconnect();
-        return dataStore.updateDataAsync(preferences -> {
-            MutablePreferences mutable = preferences.toMutablePreferences();
-            mutable.remove(PreferencesKeys.stringKey(Constants.PREF_ACCESS_TOKEN));
-            mutable.remove(PreferencesKeys.stringKey(Constants.PREF_REFRESH_TOKEN));
-            mutable.remove(PreferencesKeys.stringKey(Constants.PREF_USER_ID));
-            mutable.remove(PreferencesKeys.stringKey(Constants.PREF_USERNAME));
-            mutable.remove(PreferencesKeys.stringKey(Constants.PREF_USER_ROLE));
-            mutable.remove(PreferencesKeys.booleanKey(Constants.PREF_BETA_TESTER));
-            return Single.just(mutable);
-        }).ignoreElement();
+        return prefs.clearSession();
     }
 }

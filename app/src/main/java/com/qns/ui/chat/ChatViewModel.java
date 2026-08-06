@@ -8,8 +8,10 @@ import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
 
 import com.qns.data.crypto.CryptoSessionManager;
+import com.qns.data.local.dao.RatchetSessionDao;
 import com.qns.data.local.entity.ChatEntity;
 import com.qns.data.local.entity.MessageEntity;
+import com.qns.data.local.entity.RatchetSessionEntity;
 import com.qns.data.remote.ApiService;
 import com.qns.data.remote.ServerRepository;
 import com.qns.data.remote.WebSocketClient;
@@ -41,6 +43,7 @@ public class ChatViewModel extends ViewModel {
     private final ServerRepository servers;
     private final AuthRepository auth;
     private final CryptoSessionManager crypto;
+    private final RatchetSessionDao ratchetSessions;
     private final CompositeDisposable bag = new CompositeDisposable();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final Set<String> decrypting = new HashSet<>();
@@ -50,6 +53,7 @@ public class ChatViewModel extends ViewModel {
     public final MutableLiveData<Boolean> connected = new MutableLiveData<>(false);
     public final MutableLiveData<Boolean> isTyping = new MutableLiveData<>(false);
     public final MutableLiveData<String> error = new MutableLiveData<>();
+    public final MutableLiveData<String> fingerprint = new MutableLiveData<>("");
     private String chatId;
     private String currentUserId = "";
 
@@ -61,7 +65,8 @@ public class ChatViewModel extends ViewModel {
         ApiService api,
         ServerRepository servers,
         AuthRepository auth,
-        CryptoSessionManager crypto
+        CryptoSessionManager crypto,
+        RatchetSessionDao ratchetSessions
     ) {
         this.repository = repository;
         this.webSocket = webSocket;
@@ -70,6 +75,7 @@ public class ChatViewModel extends ViewModel {
         this.servers = servers;
         this.auth = auth;
         this.crypto = crypto;
+        this.ratchetSessions = ratchetSessions;
         bag.add(auth.getCurrentUserId().subscribeOn(Schedulers.io()).subscribe(id -> currentUserId = id == null ? "" : id, ignored -> {}));
         bag.add(webSocket.connection().observeOn(AndroidSchedulers.mainThread()).subscribe(connected::setValue, ignored -> connected.setValue(false)));
         bag.add(webSocket.events().observeOn(AndroidSchedulers.mainThread()).subscribe(this::handleEvent, value -> error.setValue(value.getMessage())));
@@ -91,6 +97,9 @@ public class ChatViewModel extends ViewModel {
         bag.add(repository.getChat(chatId).observeOn(AndroidSchedulers.mainThread()).subscribe(chat::setValue, value -> error.setValue(value.getMessage())));
         bag.add(repository.observeMessages(chatId).subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread()).subscribe(this::publishMessages, value -> error.setValue(value.getMessage())));
         bag.add(repository.syncMessages(chatId, currentUserId).subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread()).subscribe(() -> {}, value -> error.setValue(value.getMessage())));
+        // Safety number / fingerprint для TOFU-проверки.
+        bag.add(ratchetSessions.get(chatId).subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread())
+            .subscribe(session -> fingerprint.setValue(session.fingerprint == null ? "" : session.fingerprint), ignored -> {}));
     }
 
     public void sendText(String text) {
@@ -121,6 +130,11 @@ public class ChatViewModel extends ViewModel {
         if ("message_sent".equals(type) && chatId != null && chatId.equals(string(event, "chatId"))) {
             String clientId = string(event, "clientMessageId");
             if (!clientId.isEmpty()) bag.add(repository.markDelivered(clientId).subscribe());
+            return;
+        }
+        if ("read_receipt".equals(type) && chatId != null && chatId.equals(string(event, "chatId"))) {
+            String messageId = string(event, "messageId");
+            if (!messageId.isEmpty()) bag.add(repository.markRead(messageId).subscribe());
             return;
         }
         if ("typing".equals(type) && chatId != null && chatId.equals(string(event, "chatId"))) {
@@ -161,6 +175,9 @@ public class ChatViewModel extends ViewModel {
         List<MessageEntity> result = new ArrayList<>(source);
         for (MessageEntity message : result) {
             if (message.decryptedCache != null || message.encryptedContent == null || decrypting.contains(message.id)) continue;
+            // Не повторяем расшифровку для «постоянных» ошибок (ключ сменился, невалидная подпись,
+            // неподдерживаемая версия). Повторяем только транзиентные состояния (ждём ключ сессии).
+            if (message.decryptionFailed && !isTransientDecryptError(message.decryptionError)) continue;
             decrypting.add(message.id);
             bag.add(crypto.decrypt(message.chatId, message.senderId, message.encryptedContent)
                 .observeOn(AndroidSchedulers.mainThread())
@@ -178,6 +195,10 @@ public class ChatViewModel extends ViewModel {
 
     private static String string(Map<String, Object> map, String key) { Object value = map.get(key); return value == null ? "" : String.valueOf(value); }
     private static long number(Map<String, Object> map, String key, long fallback) { Object value = map.get(key); return value instanceof Number ? ((Number) value).longValue() : fallback; }
+
+    private static boolean isTransientDecryptError(String error) {
+        return error == null || error.isEmpty() || "WAITING_FOR_SESSION".equals(error);
+    }
 
     @Override protected void onCleared() {
         mainHandler.removeCallbacksAndMessages(null);

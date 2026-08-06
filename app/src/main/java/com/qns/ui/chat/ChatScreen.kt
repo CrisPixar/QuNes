@@ -3,9 +3,12 @@ package com.qns.ui.chat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -26,6 +30,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -54,9 +59,33 @@ fun ChatScreen(chatId: String, onBack: () -> Unit, vm: ChatViewModel = hiltViewM
     val connected by vm.connected.observeAsState(false)
     val isTyping by vm.isTyping.observeAsState(false)
     val error by vm.error.observeAsState()
+    val fingerprint by vm.fingerprint.observeAsState("")
     var input by remember { mutableStateOf("") }
+    var showSafety by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(error) { if (!error.isNullOrBlank()) snackbar.showSnackbar(error ?: "Ошибка") }
+
+    if (showSafety) {
+        AlertDialog(
+            onDismissRequest = { showSafety = false },
+            title = { Text("Ключ безопасности") },
+            text = {
+                Column {
+                    Text(
+                        "Сравните отпечаток с собеседником. Если он отличается — ключ собеседника изменился, возможно переустановка приложения или атака.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        if (fingerprint.isNullOrBlank()) "Сессия ещё не установлена. Отправьте первое сообщение." else fingerprint,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        fontSize = 12.sp,
+                    )
+                }
+            },
+            confirmButton = { TextButton(onClick = { showSafety = false }) { Text("Закрыть") } },
+        )
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
@@ -64,7 +93,13 @@ fun ChatScreen(chatId: String, onBack: () -> Unit, vm: ChatViewModel = hiltViewM
             TopAppBar(
                 title = {
                     Column {
-                        Text("Чат")
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(chat?.otherUsername?.ifBlank { "Чат" } ?: "Чат")
+                            if (chat?.otherUserVerified == true) {
+                                Spacer(Modifier.width(4.dp))
+                                Text("✓", color = EncryptGreen, fontSize = 16.sp)
+                            }
+                        }
                         Text(
                             if (connected) "Соединение защищено" else "Нет соединения с сервером",
                             fontSize = 11.sp,
@@ -73,7 +108,9 @@ fun ChatScreen(chatId: String, onBack: () -> Unit, vm: ChatViewModel = hiltViewM
                     }
                 },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } },
-                actions = { Icon(Icons.Filled.Lock, null, tint = EncryptGreen) },
+                actions = {
+                    IconButton(onClick = { showSafety = true }) { Icon(Icons.Filled.Lock, null, tint = EncryptGreen) }
+                },
             )
         },
         bottomBar = {
@@ -101,7 +138,7 @@ fun ChatScreen(chatId: String, onBack: () -> Unit, vm: ChatViewModel = hiltViewM
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
                 ) {
                     Text(
-                        "Внимание: пользователь отмечен как SCAM. Не отправляйте коды, пароли и деньги.",
+                        "Внимание: пользователь отмечен как SCAM. Не отправляйте коды, пароли и деньги.\nПричина: " + (chat?.otherUserScamReason?.ifBlank { "не указана" } ?: "не указана"),
                         color = MaterialTheme.colorScheme.onErrorContainer,
                         modifier = Modifier.padding(12.dp),
                     )

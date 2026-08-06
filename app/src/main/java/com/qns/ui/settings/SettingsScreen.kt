@@ -61,6 +61,7 @@ fun SettingsScreen(
     val error by vm.error.observeAsState()
     val themeMode by vm.themeMode.observeAsState("system")
     val reconnecting by vm.reconnecting.observeAsState(false)
+    val connectionStatus by vm.connectionStatus.observeAsState("")
     LaunchedEffect(loggedOut) { if (loggedOut == true) onLogout() }
 
     var themeDialog by remember { mutableStateOf(false) }
@@ -93,7 +94,9 @@ fun SettingsScreen(
             item { SettingsItem(Icons.Filled.Key, "Ключи шифрования", "Просмотр состояния ключей") { keysDialog = true } }
             item { SettingsItem(Icons.Filled.Devices, "Активные сессии", "Управление устройствами") { sessionsDialog = true; vm.loadSessions() } }
             item { SettingsItem(Icons.Filled.Security, "Уровень защиты", "TLS и состояние ключей") { securityDialog = true } }
-            item { SettingsItem(Icons.Filled.Refresh, "Переподключиться", if (reconnecting) "Проверяю сессию..." else "Проверить сервер и WebSocket") { if (!reconnecting) vm.reconnect() } }
+            item { SettingsItem(Icons.Filled.Refresh, "Переподключиться",
+                if (reconnecting) "Переподключаюсь..." else if (connectionStatus.isBlank()) "Проверить сервер и WebSocket" else "Статус: $connectionStatus"
+            ) { if (!reconnecting) vm.reconnect() } }
             if (onDebugLogs != null) item { SettingsItem(Icons.Filled.BugReport, "Debug logs", "Только для beta tester") { onDebugLogs() } }
             if (onAdminPanel != null) item {
                 SettingsItem(Icons.Filled.ChangeHistory, "Панель администратора", "Пользователи, SCAM и сессии", onAdminPanel)

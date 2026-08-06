@@ -4,6 +4,7 @@ import com.qns.data.local.dao.ChatDao;
 import com.qns.data.local.dao.MessageDao;
 import com.qns.data.local.entity.ChatEntity;
 import com.qns.data.local.entity.MessageEntity;
+import com.qns.data.local.MessageMerge;
 import com.qns.data.remote.ApiService;
 import com.qns.data.remote.ServerRepository;
 import com.qns.data.remote.WebSocketClient;
@@ -125,18 +126,40 @@ public class ChatRepository {
         entity.delivered = response.delivered;
         entity.read = response.read;
         entity.protocolVersion = protocolVersion;
-        entity.isMine = currentUserId != null && currentUserId.equals(response.senderId);
-        entity.decryptedCache = decryptedText;
-        entity.decryptionError = error;
-        entity.decryptionFailed = error != null && !error.isEmpty();
+        boolean incomingIsMine = currentUserId != null && currentUserId.equals(response.senderId);
+
         MessageEntity existing = messageDao.getById(response.id).blockingGet();
-        if (existing == null && response.clientMessageId != null && !response.clientMessageId.isEmpty()) existing = messageDao.getByClientMessageId(response.clientMessageId).blockingGet();
-        if (existing == null) messageDao.insert(entity).blockingAwait();
-        else {
-            if (existing.decryptedCache != null && entity.decryptedCache == null) entity.decryptedCache = existing.decryptedCache;
-            if (existing.decryptionError != null && entity.decryptionError == null) entity.decryptionError = existing.decryptionError;
-            entity.decryptionFailed = entity.decryptedCache == null && entity.decryptionError != null;
-            entity.isMine = existing.isMine || entity.isMine;
+        if (existing == null && response.clientMessageId != null && !response.clientMessageId.isEmpty()) {
+            existing = messageDao.getByClientMessageId(response.clientMessageId).blockingGet();
+        }
+
+        MessageMerge.Merged merged = MessageMerge.decide(
+            existing != null,
+            existing != null ? existing.decryptedCache : null,
+            existing != null ? existing.decryptionError : null,
+            existing != null && existing.isMine,
+            decryptedText,
+            error,
+            incomingIsMine
+        );
+        entity.decryptedCache = merged.decryptedCache;
+        entity.decryptionError = merged.decryptionError;
+        entity.decryptionFailed = merged.decryptionFailed;
+        entity.isMine = merged.isMine;
+
+        if (existing == null) {
+            // Дедупликация: если локально уже есть исходящее с тем же clientMessageId —
+            // обновляем его (закрепляем за ним серверный id), а не создаём копию.
+            if (response.clientMessageId != null && !response.clientMessageId.isEmpty()) {
+                MessageEntity byClient = messageDao.getByClientMessageId(response.clientMessageId).blockingGet();
+                if (byClient != null) {
+                    entity.id = byClient.id;
+                    messageDao.update(entity).blockingAwait();
+                    return;
+                }
+            }
+            messageDao.insert(entity).blockingAwait();
+        } else {
             messageDao.update(entity).blockingAwait();
         }
     }

@@ -20,12 +20,16 @@ public final class ThemeRepository {
     @Inject
     public ThemeRepository(@ApplicationContext Context context) {
         prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        mode.setValue(prefs.getString(KEY_MODE, "system"));
+        String stored = prefs.getString(KEY_MODE, "system");
+        mode.setValue(stored);
+        FurryTheme.INSTANCE.setEnabled("furry".equals(stored));
     }
 
     public void setMode(String value) {
         String normalized = "dark".equals(value) || "light".equals(value) || "furry".equals(value) ? value : "system";
         prefs.edit().putString(KEY_MODE, normalized).apply();
         mode.postValue(normalized);
+        // Включаем/выключаем замену иконок на boykisser для furry-темы.
+        FurryTheme.INSTANCE.setEnabled("furry".equals(normalized));
     }
 }

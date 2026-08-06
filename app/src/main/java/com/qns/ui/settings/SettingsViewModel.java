@@ -3,6 +3,7 @@ package com.qns.ui.settings;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
 
+import com.qns.data.remote.WebSocketClient;
 import com.qns.data.remote.model.SessionInfo;
 import com.qns.data.repository.AuthRepository;
 import com.qns.ui.theme.ThemeRepository;
@@ -20,6 +21,7 @@ import io.reactivex.rxjava3.disposables.CompositeDisposable;
 public class SettingsViewModel extends ViewModel {
     private final AuthRepository repository;
     private final ThemeRepository themeRepository;
+    private final WebSocketClient webSocket;
     private final CompositeDisposable bag = new CompositeDisposable();
     public final MutableLiveData<Boolean> loggedOut = new MutableLiveData<>();
     public final MutableLiveData<String> themeMode;
@@ -27,12 +29,17 @@ public class SettingsViewModel extends ViewModel {
     public final MutableLiveData<Boolean> sessionsLoading = new MutableLiveData<>(false);
     public final MutableLiveData<String> error = new MutableLiveData<>();
     public final MutableLiveData<Boolean> reconnecting = new MutableLiveData<>(false);
+    public final MutableLiveData<String> connectionStatus = new MutableLiveData<>("");
 
     @Inject
-    public SettingsViewModel(AuthRepository repository, ThemeRepository themeRepository) {
+    public SettingsViewModel(AuthRepository repository, ThemeRepository themeRepository, WebSocketClient webSocket) {
         this.repository = repository;
         this.themeRepository = themeRepository;
+        this.webSocket = webSocket;
         this.themeMode = themeRepository.mode;
+        bag.add(webSocket.connection()
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe(online -> connectionStatus.setValue(online ? "Подключено" : "Отключено"), ignored -> connectionStatus.setValue("Ошибка соединения")));
     }
 
     public void setTheme(String mode) {

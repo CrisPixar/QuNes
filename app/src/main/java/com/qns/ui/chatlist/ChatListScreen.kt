@@ -39,6 +39,10 @@ private fun ChatListItem(chat: ChatEntity, onClick: (String) -> Unit) {
         headlineContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(name)
+                if (chat.otherUserVerified) {
+                    Spacer(Modifier.width(4.dp))
+                    Text("✓", color = EncryptGreen, fontSize = 16.sp)
+                }
                 if (chat.otherUserScam) {
                     Spacer(Modifier.width(4.dp))
                     AssistChip({}, { Text("SCAM", fontSize = 10.sp, color = ScamRed) },
@@ -46,7 +50,13 @@ private fun ChatListItem(chat: ChatEntity, onClick: (String) -> Unit) {
                 }
             }
         },
-        supportingContent = { Text("🔒 Зашифровано", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp) },
+        supportingContent = {
+            if (chat.otherUserScam) {
+                Text("⚠ " + ((chat.otherUserScamReason ?: "").ifBlank { "Причина не указана" }), color = ScamRed, fontSize = 12.sp)
+            } else {
+                Text("🔒 Зашифровано", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+            }
+        },
         leadingContent = {
             Box {
                 Surface(Modifier.size(48.dp), shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primaryContainer) {

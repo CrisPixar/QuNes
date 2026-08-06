@@ -35,6 +35,7 @@ jobs:
         env:
           JWT_SECRET_SEED: "0000000000000000000000000000000000000000000000000000000000000001"
           ADMIN_PASSWORD: "TestAdmin123!"
+          DB_PATH: "./data/ci-test.db"
         run: bun test
       - name: Server artifact
         uses: actions/upload-artifact@v4
