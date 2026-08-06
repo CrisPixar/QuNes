@@ -81,7 +81,12 @@ public final class IdentityStore {
         for (PreKey key : keys.oneTimePreKeys) {
             if (key.id.equals(id) && !key.used) {
                 key.used = true;
-                save(keys);
+                try {
+                    save(keys);
+                } catch (Exception error) {
+                    key.used = false;
+                    throw new IllegalStateException("Unable to persist one-time prekey state", error);
+                }
                 return key.copy();
             }
         }
