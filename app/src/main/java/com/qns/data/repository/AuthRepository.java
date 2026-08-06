@@ -128,9 +128,26 @@ public class AuthRepository {
     }
 
     public Completable restoreSession() {
-        return getAccessToken()
-            .doOnSuccess(token -> {
-                if (token != null && !token.isEmpty()) webSocket.connect(token);
+        return getRefreshToken()
+            .flatMap(refresh -> {
+                if (refresh == null || refresh.isEmpty()) return Single.just("");
+                return api.refresh(
+                    servers.current().api("api/auth/refresh"),
+                    Map.of("refreshToken", refresh)
+                )
+                .flatMap(response -> saveTokens(response)
+                    .andThen(Single.fromCallable(() -> {
+                        tokenStore.set(response.accessToken);
+                        if (response.accessToken != null) webSocket.connect(response.accessToken);
+                        return response.accessToken;
+                    })))
+                .onErrorReturnItem("");
+            })
+            .flatMap(token -> {
+                if (token != null && !token.isEmpty()) return Single.just(token);
+                return getAccessToken().doOnSuccess(saved -> {
+                    if (saved != null && !saved.isEmpty()) webSocket.connect(saved);
+                });
             })
             .ignoreElement()
             .subscribeOn(Schedulers.io());
