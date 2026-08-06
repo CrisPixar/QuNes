@@ -11,6 +11,11 @@ on:
 permissions:
   contents: read
 
+# Keep only the newest evaluation run; stale queued jobs must not block the latest commit.
+concurrency:
+  group: qns-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   server:
     name: Server typecheck and tests
