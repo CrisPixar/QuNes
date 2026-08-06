@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.qns.utils.DebugLogStore
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun DebugLogScreen(onBack: () -> Unit) {
     val context = LocalContext.current
