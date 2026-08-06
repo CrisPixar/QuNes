@@ -19,7 +19,6 @@ import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
 import javax.inject.Singleton;
 
 import dagger.Module;
@@ -57,31 +56,52 @@ public class DatabaseModule {
             SharedPreferences preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
             String sealed = preferences.getString(SEALED_PASSPHRASE, null);
             if (sealed == null) {
-                byte[] passphrase = new byte[32];
-                new SecureRandom().nextBytes(passphrase);
-                byte[] iv = new byte[12];
-                new SecureRandom().nextBytes(iv);
-                Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-                cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(128, iv));
-                byte[] encrypted = cipher.doFinal(passphrase);
-                byte[] value = new byte[iv.length + encrypted.length];
-                System.arraycopy(iv, 0, value, 0, iv.length);
-                System.arraycopy(encrypted, 0, value, iv.length, encrypted.length);
-                preferences.edit().putString(SEALED_PASSPHRASE, Base64.encodeToString(value, Base64.NO_WRAP)).apply();
+                byte[] passphrase = context.getDatabasePath("qns.db").exists()
+                    ? legacyPassphrase()
+                    : randomPassphrase();
+                saveSealedPassphrase(preferences, key, passphrase);
                 return passphrase;
             }
-
-            byte[] value = Base64.decode(sealed, Base64.NO_WRAP);
-            byte[] iv = new byte[12];
-            byte[] encrypted = new byte[value.length - iv.length];
-            System.arraycopy(value, 0, iv, 0, iv.length);
-            System.arraycopy(value, iv.length, encrypted, 0, encrypted.length);
-            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, iv));
-            return cipher.doFinal(encrypted);
+            return openSealedPassphrase(key, sealed);
         } catch (Exception error) {
             throw new IllegalStateException("Encrypted database key is unavailable", error);
         }
+    }
+
+    private static byte[] randomPassphrase() {
+        byte[] passphrase = new byte[32];
+        new SecureRandom().nextBytes(passphrase);
+        return passphrase;
+    }
+
+    private static byte[] legacyPassphrase() {
+        byte[] passphrase = new byte[32];
+        byte[] alias = Constants.DB_KEY_ALIAS.getBytes(StandardCharsets.UTF_8);
+        System.arraycopy(alias, 0, passphrase, 0, Math.min(alias.length, passphrase.length));
+        return passphrase;
+    }
+
+    private static void saveSealedPassphrase(SharedPreferences preferences, SecretKey key, byte[] passphrase) throws Exception {
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.ENCRYPT_MODE, key);
+        byte[] iv = cipher.getIV();
+        byte[] encrypted = cipher.doFinal(passphrase);
+        byte[] value = new byte[iv.length + encrypted.length];
+        System.arraycopy(iv, 0, value, 0, iv.length);
+        System.arraycopy(encrypted, 0, value, iv.length, encrypted.length);
+        preferences.edit().putString(SEALED_PASSPHRASE, Base64.encodeToString(value, Base64.NO_WRAP)).apply();
+    }
+
+    private static byte[] openSealedPassphrase(SecretKey key, String sealed) throws Exception {
+        byte[] value = Base64.decode(sealed, Base64.NO_WRAP);
+        if (value.length <= 12) throw new IllegalArgumentException("Invalid database key");
+        byte[] iv = new byte[12];
+        byte[] encrypted = new byte[value.length - iv.length];
+        System.arraycopy(value, 0, iv, 0, iv.length);
+        System.arraycopy(value, iv.length, encrypted, 0, encrypted.length);
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, iv));
+        return cipher.doFinal(encrypted);
     }
 
     private static SecretKey getOrCreateKey() throws Exception {

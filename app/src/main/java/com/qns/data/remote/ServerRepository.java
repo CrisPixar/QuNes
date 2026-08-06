@@ -30,7 +30,8 @@ public final class ServerRepository {
 
     public synchronized List<ServerProfile> getServers() {
         List<ServerProfile> result = new ArrayList<>();
-        result.add(new ServerProfile("local", "Локальный сервер", "http://10.0.2.2:3000/", "ws://10.0.2.2:3000/ws", false));
+        result.add(new ServerProfile("device", "Этот телефон", "http://127.0.0.1:3000/", "ws://127.0.0.1:3000/ws", false));
+        result.add(new ServerProfile("local", "Эмулятор Android", "http://10.0.2.2:3000/", "ws://10.0.2.2:3000/ws", false));
         result.add(new ServerProfile("template", "Облачный сервер", "https://your-qns-server.com/", "wss://your-qns-server.com/ws", false));
         String raw = prefs.getString(KEY_CUSTOM, "[]");
         try {

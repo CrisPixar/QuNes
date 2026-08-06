@@ -4,24 +4,23 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Base64;
 
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
+import org.bouncycastle.crypto.KeyGenerationParameters;
+import org.bouncycastle.crypto.agreement.X25519Agreement;
+import org.bouncycastle.crypto.generators.X25519KeyPairGenerator;
+import org.bouncycastle.crypto.params.X25519PrivateKeyParameters;
+import org.bouncycastle.crypto.params.X25519PublicKeyParameters;
 import org.json.JSONObject;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.security.KeyFactory;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.MessageDigest;
-import java.security.Security;
-import java.security.spec.PKCS8EncodedKeySpec;
-import java.security.spec.X509EncodedKeySpec;
+import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.Map;
 
 import javax.crypto.Cipher;
-import javax.crypto.KeyAgreement;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
@@ -40,11 +39,8 @@ public final class IdentityStore {
     private static final String PREFS = "qns_identity";
     private static final String KEY_DATA = "identity_data";
     private static final String SEAL_ALIAS = "qns_identity_seal";
+    private static final SecureRandom RANDOM = new SecureRandom();
     private final SharedPreferences preferences;
-
-    static {
-        if (Security.getProvider("BC") == null) Security.addProvider(new BouncyCastleProvider());
-    }
 
     @Inject
     public IdentityStore(@ApplicationContext Context context) {
@@ -54,27 +50,31 @@ public final class IdentityStore {
     public synchronized Map<String, Object> publicKeys() {
         Map<String, Object> result = new HashMap<>();
         Map<String, String> identity = new HashMap<>();
-        identity.put("key", base64(identity().getPublic().getEncoded()));
+        identity.put("key", base64(identity().publicKey));
         result.put("identity_x25519", identity);
         return result;
     }
 
     public synchronized String encrypt(String text, String recipientPublicKey) throws Exception {
         if (text == null || recipientPublicKey == null || recipientPublicKey.isEmpty()) throw new IllegalArgumentException("Missing encryption key");
-        KeyPair ephemeral = generatePair();
-        byte[] shared = derive(ephemeral.getPrivate().getEncoded(), Base64.decode(recipientPublicKey, Base64.DEFAULT));
+        byte[] recipient = Base64.decode(recipientPublicKey, Base64.DEFAULT);
+        if (recipient.length != 32) throw new IllegalArgumentException("Invalid recipient key");
+        AsymmetricCipherKeyPair ephemeral = generatePair();
+        byte[] ephemeralPrivate = ((X25519PrivateKeyParameters) ephemeral.getPrivate()).getEncoded();
+        byte[] ephemeralPublic = ((X25519PublicKeyParameters) ephemeral.getPublic()).getEncoded();
+        byte[] shared = derive(ephemeralPrivate, recipient);
         byte[] key = deriveAesKey(shared);
         byte[] iv = new byte[12];
-        new java.security.SecureRandom().nextBytes(iv);
+        RANDOM.nextBytes(iv);
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(128, iv));
         byte[] ciphertext = cipher.doFinal(text.getBytes(StandardCharsets.UTF_8));
         JSONObject envelope = new JSONObject();
         envelope.put("v", 1);
-        envelope.put("epk", base64(ephemeral.getPublic().getEncoded()));
+        envelope.put("epk", base64(ephemeralPublic));
         envelope.put("iv", base64(iv));
         envelope.put("ct", base64(ciphertext));
-        KeyManager.wipe(shared, key, iv, ciphertext);
+        KeyManager.wipe(ephemeralPrivate, ephemeralPublic, shared, key, iv, ciphertext);
         return envelope.toString();
     }
 
@@ -82,7 +82,9 @@ public final class IdentityStore {
         JSONObject value = new JSONObject(envelope);
         if (value.optInt("v", 0) != 1) throw new IllegalArgumentException("Unsupported envelope");
         byte[] ephemeralPublic = Base64.decode(value.getString("epk"), Base64.DEFAULT);
-        byte[] shared = derive(identity().getPrivate().getEncoded(), ephemeralPublic);
+        if (ephemeralPublic.length != 32) throw new IllegalArgumentException("Invalid ephemeral key");
+        IdentityKeys identity = identity();
+        byte[] shared = derive(identity.privateKey, ephemeralPublic);
         byte[] key = deriveAesKey(shared);
         byte[] iv = Base64.decode(value.getString("iv"), Base64.DEFAULT);
         byte[] ciphertext = Base64.decode(value.getString("ct"), Base64.DEFAULT);
@@ -90,32 +92,37 @@ public final class IdentityStore {
         cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(128, iv));
         byte[] plain = cipher.doFinal(ciphertext);
         String result = new String(plain, StandardCharsets.UTF_8);
-        KeyManager.wipe(shared, key, iv, ciphertext, plain);
+        KeyManager.wipe(ephemeralPublic, shared, key, iv, ciphertext, plain);
         return result;
     }
 
-    private KeyPair identity() {
+    private IdentityKeys identity() {
         String stored = preferences.getString(KEY_DATA, null);
         try {
-            if (stored != null) return decodePair(unseal(Base64.decode(stored, Base64.NO_WRAP)));
-            KeyPair pair = generatePair();
-            preferences.edit().putString(KEY_DATA, Base64.encodeToString(seal(encodePair(pair)), Base64.NO_WRAP)).apply();
-            return pair;
+            if (stored != null) {
+                byte[] decoded = unseal(Base64.decode(stored, Base64.NO_WRAP));
+                if (decoded.length == 64) return new IdentityKeys(decoded);
+            }
+            IdentityKeys keys = new IdentityKeys(generatePair());
+            preferences.edit().putString(KEY_DATA, Base64.encodeToString(seal(keys.encode()), Base64.NO_WRAP)).apply();
+            return keys;
         } catch (Exception error) {
             throw new IllegalStateException("Identity key is unavailable", error);
         }
     }
 
-    private static KeyPair generatePair() throws Exception {
-        return KeyPairGenerator.getInstance("X25519", "BC").generateKeyPair();
+    private static AsymmetricCipherKeyPair generatePair() {
+        X25519KeyPairGenerator generator = new X25519KeyPairGenerator();
+        generator.init(new KeyGenerationParameters(RANDOM, 255));
+        return generator.generateKeyPair();
     }
 
-    private static byte[] derive(byte[] privateEncoded, byte[] publicEncoded) throws Exception {
-        KeyFactory factory = KeyFactory.getInstance("X25519", "BC");
-        KeyAgreement agreement = KeyAgreement.getInstance("X25519", "BC");
-        agreement.init(factory.generatePrivate(new PKCS8EncodedKeySpec(privateEncoded)));
-        agreement.doPhase(factory.generatePublic(new X509EncodedKeySpec(publicEncoded)), true);
-        return agreement.generateSecret();
+    private static byte[] derive(byte[] privateKey, byte[] publicKey) {
+        X25519Agreement agreement = new X25519Agreement();
+        agreement.init(new X25519PrivateKeyParameters(privateKey, 0));
+        byte[] shared = new byte[agreement.getAgreementSize()];
+        agreement.calculateAgreement(new X25519PublicKeyParameters(publicKey, 0), shared, 0);
+        return shared;
     }
 
     private static byte[] deriveAesKey(byte[] shared) throws Exception {
@@ -141,10 +148,9 @@ public final class IdentityStore {
     }
 
     private byte[] seal(byte[] plain) throws Exception {
-        byte[] iv = new byte[12];
-        new java.security.SecureRandom().nextBytes(iv);
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.ENCRYPT_MODE, sealKey(), new GCMParameterSpec(128, iv));
+        cipher.init(Cipher.ENCRYPT_MODE, sealKey());
+        byte[] iv = cipher.getIV();
         byte[] encrypted = cipher.doFinal(plain);
         return ByteBuffer.allocate(iv.length + encrypted.length).put(iv).put(encrypted).array();
     }
@@ -152,36 +158,36 @@ public final class IdentityStore {
     private byte[] unseal(byte[] value) throws Exception {
         if (value.length < 13) throw new IllegalArgumentException("Invalid identity data");
         byte[] iv = new byte[12];
-        byte[] encrypted = new byte[value.length - 12];
-        System.arraycopy(value, 0, iv, 0, 12);
-        System.arraycopy(value, 12, encrypted, 0, encrypted.length);
+        byte[] encrypted = new byte[value.length - iv.length];
+        System.arraycopy(value, 0, iv, 0, iv.length);
+        System.arraycopy(value, iv.length, encrypted, 0, encrypted.length);
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(Cipher.DECRYPT_MODE, sealKey(), new GCMParameterSpec(128, iv));
         return cipher.doFinal(encrypted);
     }
 
-    private static byte[] encodePair(KeyPair pair) {
-        byte[] privateKey = pair.getPrivate().getEncoded();
-        byte[] publicKey = pair.getPublic().getEncoded();
-        return ByteBuffer.allocate(4 + privateKey.length + publicKey.length)
-            .putInt(privateKey.length).put(privateKey).put(publicKey).array();
-    }
-
-    private static KeyPair decodePair(byte[] encoded) throws Exception {
-        ByteBuffer buffer = ByteBuffer.wrap(encoded);
-        int privateLength = buffer.getInt();
-        if (privateLength <= 0 || privateLength >= encoded.length) throw new IllegalArgumentException("Invalid identity data");
-        byte[] privateKey = new byte[privateLength];
-        byte[] publicKey = new byte[buffer.remaining() - privateLength];
-        buffer.get(privateKey).get(publicKey);
-        KeyFactory factory = KeyFactory.getInstance("X25519", "BC");
-        return new KeyPair(
-            factory.generatePublic(new X509EncodedKeySpec(publicKey)),
-            factory.generatePrivate(new PKCS8EncodedKeySpec(privateKey))
-        );
-    }
-
     private static String base64(byte[] value) {
-        return Base64.encodeToString(value, Base64.NO_WRAP | Base64.DEFAULT);
+        return Base64.encodeToString(value, Base64.NO_WRAP);
+    }
+
+    private static final class IdentityKeys {
+        final byte[] privateKey;
+        final byte[] publicKey;
+
+        IdentityKeys(AsymmetricCipherKeyPair pair) {
+            privateKey = ((X25519PrivateKeyParameters) pair.getPrivate()).getEncoded();
+            publicKey = ((X25519PublicKeyParameters) pair.getPublic()).getEncoded();
+        }
+
+        IdentityKeys(byte[] encoded) {
+            privateKey = new byte[32];
+            publicKey = new byte[32];
+            System.arraycopy(encoded, 0, privateKey, 0, 32);
+            System.arraycopy(encoded, 32, publicKey, 0, 32);
+        }
+
+        byte[] encode() {
+            return ByteBuffer.allocate(64).put(privateKey).put(publicKey).array();
+        }
     }
 }

@@ -76,11 +76,9 @@ public class AuthRepository {
     }
 
     public Single<AuthResponse> register(String username, String password) {
-        return api.register(
-                servers.current().api("api/auth/register"),
-                new AuthRequest(username, password, identityStore.publicKeys())
-            )
+        return Single.fromCallable(() -> new AuthRequest(username, password, identityStore.publicKeys()))
             .subscribeOn(Schedulers.io())
+            .flatMap(request -> api.register(servers.current().api("api/auth/register"), request))
             .flatMap(ignored -> login(username, password));
     }
 

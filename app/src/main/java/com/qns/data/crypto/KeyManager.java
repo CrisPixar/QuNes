@@ -117,15 +117,21 @@ public class KeyManager {
     // ---- X25519 (ECDH для гибридной схемы) ----
 
     public KeyPair generateX25519KeyPair() throws Exception {
-        KeyPairGenerator kpg = KeyPairGenerator.getInstance("X25519", "BC");
-        kpg.initialize(new NamedParameterSpec("X25519"), random);
-        return kpg.generateKeyPair();
+        try {
+            return KeyPairGenerator.getInstance("X25519").generateKeyPair();
+        } catch (NoSuchAlgorithmException error) {
+            KeyPairGenerator kpg = KeyPairGenerator.getInstance("X25519", "BC");
+            kpg.initialize(new NamedParameterSpec("X25519"), random);
+            return kpg.generateKeyPair();
+        }
     }
 
-    // ---- Ed25519 (подписи для гибридной схемы) ----
-
     public KeyPair generateEd25519KeyPair() throws Exception {
-        return KeyPairGenerator.getInstance("Ed25519", "BC").generateKeyPair();
+        try {
+            return KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
+        } catch (NoSuchAlgorithmException error) {
+            return KeyPairGenerator.getInstance("Ed25519", "BC").generateKeyPair();
+        }
     }
 
     // ---- Утилиты ----
