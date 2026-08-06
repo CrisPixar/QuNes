@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel;
 
 import com.qns.data.remote.ApiService;
 import com.qns.data.remote.ServerRepository;
+import com.qns.data.repository.ChatRepository;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,15 +22,17 @@ import io.reactivex.rxjava3.schedulers.Schedulers;
 public final class ContactsViewModel extends ViewModel {
     private final ApiService api;
     private final ServerRepository servers;
+    private final ChatRepository chats;
     private final CompositeDisposable bag = new CompositeDisposable();
     public final MutableLiveData<List<Contact>> contacts = new MutableLiveData<>(new ArrayList<>());
     public final MutableLiveData<Boolean> loading = new MutableLiveData<>(false);
     public final MutableLiveData<String> error = new MutableLiveData<>();
 
     @Inject
-    public ContactsViewModel(ApiService api, ServerRepository servers) {
+    public ContactsViewModel(ApiService api, ServerRepository servers, ChatRepository chats) {
         this.api = api;
         this.servers = servers;
+        this.chats = chats;
     }
 
     public void search(String query) {
@@ -65,8 +68,9 @@ public final class ContactsViewModel extends ViewModel {
                 Map.of("type", "direct", "memberIds", java.util.List.of(userId))
             )
             .subscribeOn(Schedulers.io())
+            .flatMap(result -> chats.syncChats().andThen(io.reactivex.rxjava3.core.Single.just(string(result, "chatId"))))
             .observeOn(AndroidSchedulers.mainThread())
-            .subscribe(result -> listener.onOpen(string(result, "chatId")), value -> error.setValue(value.getMessage())));
+            .subscribe(listener::onOpen, value -> error.setValue(value.getMessage())));
     }
 
     private static String string(Map<String, ?> map, String key) {

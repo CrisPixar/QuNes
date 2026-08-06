@@ -11,9 +11,9 @@ import io.reactivex.rxjava3.core.Single;
 import retrofit2.http.Body;
 import retrofit2.http.DELETE;
 import retrofit2.http.GET;
+import retrofit2.http.HTTP;
 import retrofit2.http.POST;
 import retrofit2.http.PUT;
-import retrofit2.http.Path;
 import retrofit2.http.Query;
 import retrofit2.http.Url;
 
@@ -27,7 +27,7 @@ public interface ApiService {
     @POST
     Single<AuthResponse> refresh(@Url String url, @Body Map<String, String> body);
 
-    @DELETE
+    @HTTP(method = "DELETE", hasBody = true)
     Single<Map<String, String>> logout(@Url String url, @Body Map<String, String> body);
 
     @GET
@@ -44,6 +44,9 @@ public interface ApiService {
 
     @POST
     Single<Map<String, Object>> uploadPrekeys(@Url String url, @Body Map<String, Object> body);
+
+    @PUT
+    Single<Map<String, Object>> uploadIdentityKeys(@Url String url, @Body Map<String, Object> body);
 
     @GET
     Single<List<Map<String, Object>>> searchUsers(@Url String url, @Query("q") String query);

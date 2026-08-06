@@ -11,7 +11,7 @@ import {
   handleRevokeSession,
   handleRevokeAllSessions,
 } from "./routes/auth.js";
-import { handleGetPrekeys, handleUploadPrekeys, handleGetKeyBundle } from "./routes/keys.js";
+import { handleGetPrekeys, handleUploadPrekeys, handleUploadIdentityKeys, handleGetKeyBundle } from "./routes/keys.js";
 import { handleSearchUsers, handleGetUser } from "./routes/users.js";
 import { handleGetChats, handleCreateChat, handleGetMessages } from "./routes/chats.js";
 import {
@@ -92,6 +92,7 @@ async function route(req: Request, method: string, path: string): Promise<Respon
   if (ownSession && method === "DELETE") return handleRevokeSession(req, ownSession[1]);
 
   if (path === "/api/keys/prekeys" && method === "POST") return handleUploadPrekeys(req);
+  if (path === "/api/keys/identity" && method === "PUT") return handleUploadIdentityKeys(req);
   const prekeys = path.match(/^\/api\/keys\/prekeys\/([^/]+)$/);
   if (prekeys && method === "GET") return handleGetPrekeys(req, prekeys[1]);
   const bundle = path.match(/^\/api\/keys\/bundle\/([^/]+)$/);

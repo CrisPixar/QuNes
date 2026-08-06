@@ -50,6 +50,33 @@ export async function handleUploadPrekeys(req: Request): Promise<Response> {
   return json({ uploaded });
 }
 
+export async function handleUploadIdentityKeys(req: Request): Promise<Response> {
+  const auth = requireAuth(req);
+  if (auth instanceof Response) return auth;
+  const body = await req.json().catch(() => null);
+  const publicKeys = body?.publicKeys;
+  if (!publicKeys || typeof publicKeys !== "object") return json({ error: "publicKeys object required" }, 400);
+
+  const db = getDB();
+  const allowed = ["identity_kem", "identity_dsa", "identity_x25519", "identity_ed25519", "signed_prekey"];
+  let uploaded = 0;
+  for (const keyType of allowed) {
+    const value = publicKeys[keyType];
+    const key = value && typeof value === "object" ? value.key : null;
+    const signature = value && typeof value === "object" ? value.signature : null;
+    if (!isSafeKey(key, MAX_KEY_SIZE)) continue;
+    if (signature !== null && signature !== undefined && !isSafeKey(signature, MAX_KEY_SIZE)) continue;
+    db.run("DELETE FROM user_keys WHERE user_id = ? AND key_type = ?", [auth.userId, keyType]);
+    db.run(
+      "INSERT INTO user_keys (id,user_id,key_type,public_key,signature,created_at) VALUES (?,?,?,?,?,?)",
+      [generateId(), auth.userId, keyType, key, signature ?? null, Date.now()],
+    );
+    uploaded++;
+  }
+  if (!uploaded) return json({ error: "No valid identity keys" }, 400);
+  return json({ uploaded });
+}
+
 export function handleGetKeyBundle(req: Request, targetId: string): Response {
   const auth = requireAuth(req);
   if (auth instanceof Response) return auth;

@@ -14,6 +14,8 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.BottomAppBar
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,6 +50,7 @@ import java.util.Locale
 fun ChatScreen(chatId: String, onBack: () -> Unit, vm: ChatViewModel = hiltViewModel()) {
     LaunchedEffect(chatId) { vm.init(chatId) }
     val messages by vm.messages.observeAsState(emptyList())
+    val chat by vm.chat.observeAsState()
     val isTyping by vm.isTyping.observeAsState(false)
     val error by vm.error.observeAsState()
     var input by remember { mutableStateOf("") }
@@ -86,9 +89,23 @@ fun ChatScreen(chatId: String, onBack: () -> Unit, vm: ChatViewModel = hiltViewM
             }
         },
     ) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding), reverseLayout = true) {
-            if (isTyping) item { Text("Печатает…", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp)) }
-            items(messages.reversed(), key = { it.id }) { message -> MessageBubble(message) }
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            if (chat?.otherUserScam == true) {
+                Card(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                ) {
+                    Text(
+                        "Внимание: пользователь отмечен как SCAM. Не отправляйте коды, пароли и деньги.",
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(12.dp),
+                    )
+                }
+            }
+            LazyColumn(Modifier.fillMaxWidth().weight(1f), reverseLayout = true) {
+                if (isTyping) item { Text("Печатает…", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp)) }
+                items(messages.reversed(), key = { it.id }) { message -> MessageBubble(message) }
+            }
         }
     }
 }

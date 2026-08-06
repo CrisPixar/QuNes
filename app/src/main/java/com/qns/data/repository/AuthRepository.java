@@ -19,6 +19,7 @@ import com.qns.data.remote.model.SessionInfo;
 import com.qns.utils.Constants;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -70,6 +71,16 @@ public class AuthRepository {
             .flatMap(response -> saveTokens(response)
                 .andThen(Single.fromCallable(() -> {
                     tokenStore.set(response.accessToken);
+                    return identityStore.publicKeys();
+                }).onErrorReturnItem(Collections.<String, Object>emptyMap()))
+                .flatMap(keys -> {
+                    Map<String, Object> body = new java.util.HashMap<>();
+                    body.put("publicKeys", keys);
+                    return api.uploadIdentityKeys(
+                        servers.current().api("api/keys/identity"), body
+                    ).onErrorReturnItem(Collections.<String, Object>emptyMap());
+                })
+                .andThen(Single.fromCallable(() -> {
                     if (response.accessToken != null) webSocket.connect(response.accessToken);
                     return response;
                 })));

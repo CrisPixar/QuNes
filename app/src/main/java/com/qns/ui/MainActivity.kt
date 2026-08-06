@@ -1,5 +1,8 @@
 package com.qns.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 
 import androidx.activity.ComponentActivity
@@ -27,6 +30,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             val mode by themeRepository.mode.observeAsState("system")
             QNSTheme(mode = mode) { NavGraph() }
+        }
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 700)
         }
     }
 }
