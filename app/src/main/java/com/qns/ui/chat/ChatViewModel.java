@@ -120,7 +120,7 @@ public class ChatViewModel extends ViewModel {
         String type = string(event, "type");
         if ("message_sent".equals(type) && chatId != null && chatId.equals(string(event, "chatId"))) {
             String clientId = string(event, "clientMessageId");
-            if (!clientId.isEmpty()) bag.add(repository.markDelivered(clientId));
+            if (!clientId.isEmpty()) bag.add(repository.markDelivered(clientId).subscribe());
             return;
         }
         if ("typing".equals(type) && chatId != null && chatId.equals(string(event, "chatId"))) {
@@ -149,10 +149,10 @@ public class ChatViewModel extends ViewModel {
             .observeOn(AndroidSchedulers.mainThread())
             .subscribe(result -> {
                 String decryptError = "OK".equals(result.status) ? null : result.status;
-                bag.add(repository.saveIncoming(response, currentUserId, result.text, decryptError, result.protocolVersion));
+                bag.add(repository.saveIncoming(response, currentUserId, result.text, decryptError, result.protocolVersion).subscribe());
             }, value -> {
                 String message = value.getMessage() == null ? "Не удалось расшифровать сообщение" : value.getMessage();
-                bag.add(repository.saveIncoming(response, currentUserId, null, message, response.protocolVersion));
+                bag.add(repository.saveIncoming(response, currentUserId, null, message, response.protocolVersion).subscribe());
                 error.setValue(message);
             }));
     }
@@ -166,11 +166,11 @@ public class ChatViewModel extends ViewModel {
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(value -> {
                     decrypting.remove(message.id);
-                    if ("OK".equals(value.status)) bag.add(repository.saveDecrypted(message.id, value.text));
-                    else bag.add(repository.saveDecryptionError(message.id, value.status));
+                    if ("OK".equals(value.status)) bag.add(repository.saveDecrypted(message.id, value.text).subscribe());
+                    else bag.add(repository.saveDecryptionError(message.id, value.status).subscribe());
                 }, value -> {
                     decrypting.remove(message.id);
-                    bag.add(repository.saveDecryptionError(message.id, value.getMessage() == null ? "decrypt_failed" : value.getMessage()));
+                    bag.add(repository.saveDecryptionError(message.id, value.getMessage() == null ? "decrypt_failed" : value.getMessage()).subscribe());
                 }));
         }
         messages.setValue(result);
