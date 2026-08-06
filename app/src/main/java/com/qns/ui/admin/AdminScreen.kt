@@ -99,7 +99,7 @@ fun AdminScreen(onBack: () -> Unit, vm: AdminViewModel = hiltViewModel()) {
                     trailingContent = {
                         Row {
                             IconButton(onClick = { vm.setAdmin(user.id, user.role != "admin") }) {
-                                Icon(Icons.Filled.AdminPanelSettings, null, tint = if (user.role == "admin") EncryptGreen else MaterialTheme.colorScheme.onSurfaceVariant)
+                                Icon(Icons.Filled.ChangeHistory, null, tint = if (user.role == "admin") EncryptGreen else MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             IconButton(onClick = { scamDialogUser = user }) {
                                 Icon(if (user.isScam) Icons.Filled.CheckCircle else Icons.Filled.Warning, null,

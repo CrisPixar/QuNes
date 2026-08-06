@@ -17,7 +17,6 @@ import com.qns.data.remote.WebSocketClient;
 import com.qns.data.remote.model.MessageResponse;
 import com.qns.data.repository.ChatRepository;
 import com.qns.domain.usecase.SendMessageUseCase;
-import com.qns.utils.NotificationHelper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,13 +37,13 @@ public class ChatViewModel extends ViewModel {
     private final ApiService api;
     private final ServerRepository servers;
     private final IdentityStore identityStore;
-    private final NotificationHelper notifications;
     private final CompositeDisposable bag = new CompositeDisposable();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final Gson gson = new Gson();
 
     public final MutableLiveData<List<MessageEntity>> messages = new MutableLiveData<>();
     public final MutableLiveData<ChatEntity> chat = new MutableLiveData<>();
+    public final MutableLiveData<Boolean> connected = new MutableLiveData<>(false);
     public final MutableLiveData<Boolean> isTyping = new MutableLiveData<>(false);
     public final MutableLiveData<String> error = new MutableLiveData<>();
     private String chatId;
@@ -56,8 +55,7 @@ public class ChatViewModel extends ViewModel {
         SendMessageUseCase sendUseCase,
         ApiService api,
         ServerRepository servers,
-        IdentityStore identityStore,
-        NotificationHelper notifications
+        IdentityStore identityStore
     ) {
         this.repository = repository;
         this.webSocket = webSocket;
@@ -65,7 +63,9 @@ public class ChatViewModel extends ViewModel {
         this.api = api;
         this.servers = servers;
         this.identityStore = identityStore;
-        this.notifications = notifications;
+        bag.add(webSocket.connection()
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe(connected::setValue, value -> connected.setValue(false)));
         bag.add(webSocket.events()
             .observeOn(AndroidSchedulers.mainThread())
             .subscribe(this::handleEvent, value -> error.setValue(value.getMessage())));
@@ -157,7 +157,6 @@ public class ChatViewModel extends ViewModel {
             String decrypted = null;
             try { decrypted = identityStore.decrypt(response.encryptedPayload); } catch (Exception ignored) {}
             String text = decrypted;
-            notifications.showMessage("Новое сообщение", text == null ? "Зашифрованное сообщение" : text);
             bag.add(repository.saveIncoming(response, text)
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(() -> {}, value -> error.setValue(value.getMessage())));

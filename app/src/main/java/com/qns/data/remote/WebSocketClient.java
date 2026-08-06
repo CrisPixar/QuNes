@@ -4,6 +4,7 @@ import android.util.Log;
 
 import com.google.gson.Gson;
 import com.qns.utils.Constants;
+import com.qns.utils.NotificationHelper;
 
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -12,6 +13,7 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 
 import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.subjects.BehaviorSubject;
 import io.reactivex.rxjava3.subjects.PublishSubject;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -25,16 +27,19 @@ public class WebSocketClient {
     private final Gson gson = new Gson();
     private final OkHttpClient http;
     private final ServerRepository servers;
+    private final NotificationHelper notifications;
     private final PublishSubject<Map<String, Object>> events = PublishSubject.create();
+    private final BehaviorSubject<Boolean> connection = BehaviorSubject.createDefault(false);
     private WebSocket socket;
     private String token;
     private boolean authenticated;
     private boolean stopped;
 
     @Inject
-    public WebSocketClient(OkHttpClient http, ServerRepository servers) {
+    public WebSocketClient(OkHttpClient http, ServerRepository servers, NotificationHelper notifications) {
         this.http = http;
         this.servers = servers;
+        this.notifications = notifications;
     }
 
     public synchronized void connect(String accessToken) {
@@ -42,6 +47,7 @@ public class WebSocketClient {
         stopped = false;
         token = accessToken;
         authenticated = false;
+        connection.onNext(false);
         if (socket != null) socket.close(1000, "reconnect");
         Request request = new Request.Builder().url(servers.current().wsUrl).build();
         socket = http.newWebSocket(request, new WebSocketListener() {
@@ -56,8 +62,10 @@ public class WebSocketClient {
                     Map<String, Object> event = gson.fromJson(text, Map.class);
                     if ("auth_ok".equals(event.get("type"))) {
                         authenticated = true;
+                        connection.onNext(true);
                         Log.d(TAG, "Authenticated");
                     } else {
+                        if ("message".equals(event.get("type"))) notifications.showMessage("Новое сообщение", "Зашифрованное сообщение");
                         events.onNext(event);
                     }
                 } catch (Exception error) {
@@ -68,6 +76,7 @@ public class WebSocketClient {
             @Override
             public void onFailure(WebSocket webSocket, Throwable error, Response response) {
                 authenticated = false;
+                connection.onNext(false);
                 Log.w(TAG, "Connection failed", error);
                 scheduleReconnect();
             }
@@ -75,6 +84,7 @@ public class WebSocketClient {
             @Override
             public void onClosed(WebSocket webSocket, int code, String reason) {
                 authenticated = false;
+                connection.onNext(false);
                 if (!stopped) scheduleReconnect();
             }
         });
@@ -86,6 +96,7 @@ public class WebSocketClient {
         socket = null;
         authenticated = false;
         token = null;
+        connection.onNext(false);
     }
 
     public void sendMessage(String chatId, String encryptedPayload, String ratchetHeader, String signature) {
@@ -112,6 +123,10 @@ public class WebSocketClient {
 
     public Observable<Map<String, Object>> events() {
         return events.hide();
+    }
+
+    public Observable<Boolean> connection() {
+        return connection.hide().distinctUntilChanged();
     }
 
     public boolean isAuthenticated() {

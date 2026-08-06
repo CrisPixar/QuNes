@@ -127,6 +127,15 @@ public class AuthRepository {
         });
     }
 
+    public Completable restoreSession() {
+        return getAccessToken()
+            .doOnSuccess(token -> {
+                if (token != null && !token.isEmpty()) webSocket.connect(token);
+            })
+            .ignoreElement()
+            .subscribeOn(Schedulers.io());
+    }
+
     public Single<String> getRefreshToken() {
         return dataStore.data().firstOrError().map(preferences -> {
             String token = preferences.get(PreferencesKeys.stringKey(Constants.PREF_REFRESH_TOKEN));

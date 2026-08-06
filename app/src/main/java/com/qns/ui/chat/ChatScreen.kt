@@ -51,6 +51,7 @@ fun ChatScreen(chatId: String, onBack: () -> Unit, vm: ChatViewModel = hiltViewM
     LaunchedEffect(chatId) { vm.init(chatId) }
     val messages by vm.messages.observeAsState(emptyList())
     val chat by vm.chat.observeAsState()
+    val connected by vm.connected.observeAsState(false)
     val isTyping by vm.isTyping.observeAsState(false)
     val error by vm.error.observeAsState()
     var input by remember { mutableStateOf("") }
@@ -64,7 +65,11 @@ fun ChatScreen(chatId: String, onBack: () -> Unit, vm: ChatViewModel = hiltViewM
                 title = {
                     Column {
                         Text("Чат")
-                        Text("Зашифрованный конверт", fontSize = 11.sp, color = EncryptGreen)
+                        Text(
+                            if (connected) "Соединение защищено" else "Нет соединения с сервером",
+                            fontSize = 11.sp,
+                            color = if (connected) EncryptGreen else MaterialTheme.colorScheme.error,
+                        )
                     }
                 },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } },

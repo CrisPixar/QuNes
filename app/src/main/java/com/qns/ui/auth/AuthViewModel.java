@@ -25,6 +25,7 @@ public class AuthViewModel extends ViewModel {
         this.loginUC = lu; this.regUC = ru; this.repo = repo;
         bag.add(repo.observeLoggedIn().observeOn(AndroidSchedulers.mainThread()).subscribe(isLoggedIn::setValue));
         bag.add(repo.observeRole()    .observeOn(AndroidSchedulers.mainThread()).subscribe(userRole::setValue));
+        bag.add(repo.restoreSession().subscribe(() -> {}, ignored -> {}));
     }
     public void login(String u, String p) {
         error.setValue(null);

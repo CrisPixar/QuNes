@@ -13,7 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.ChangeHistory
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Palette
@@ -90,7 +90,7 @@ fun SettingsScreen(
             item { SettingsItem(Icons.Filled.Devices, "Активные сессии", "Управление устройствами") { sessionsDialog = true; vm.loadSessions() } }
             item { SettingsItem(Icons.Filled.Security, "Уровень защиты", "TLS и состояние ключей") { securityDialog = true } }
             if (onAdminPanel != null) item {
-                SettingsItem(Icons.Filled.AdminPanelSettings, "Панель администратора", "Пользователи, SCAM и сессии", onAdminPanel)
+                SettingsItem(Icons.Filled.ChangeHistory, "Панель администратора", "Пользователи, SCAM и сессии", onAdminPanel)
             }
             item {
                 Spacer(Modifier.height(14.dp))
