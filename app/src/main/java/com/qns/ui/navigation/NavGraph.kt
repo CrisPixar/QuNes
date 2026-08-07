@@ -11,7 +11,6 @@ import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -22,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -41,7 +41,6 @@ import com.qns.ui.chatlist.ChatListScreen
 import com.qns.ui.contacts.ContactsScreen
 import com.qns.ui.settings.SettingsScreen
 import com.qns.ui.theme.FurryIcon
-import com.qns.ui.theme.FurryAvatar
 
 object Routes {
     const val AUTH = "auth"
@@ -100,6 +99,7 @@ fun NavGraph() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MainScaffold(navController: NavHostController, isAdmin: Boolean, showDebugLogs: Boolean, onLogout: () -> Unit) {
     val inner = rememberNavController()
@@ -142,17 +142,7 @@ private fun MainScaffold(navController: NavHostController, isAdmin: Boolean, sho
                 composable("settings") { SettingsScreen(onLogout, if (isAdmin) ({ navController.navigate(Routes.ADMIN) }) else null, if (showDebugLogs) ({ safeNavigate(inner, "debug_logs") }) else null) }
                 if (showDebugLogs) composable("debug_logs") { DebugLogScreen { inner.popBackStack() } }
                 // Fallback для неизвестных маршрутов — не даём «белый экран».
-                composable("unknown") {
-                    androidx.compose.material3.Scaffold(
-                        topBar = { androidx.compose.material3.TopAppBar(title = { Text("Ошибка") }) },
-                    ) { pad ->
-                        Column(Modifier.padding(pad).fillMaxSize().padding(16.dp)) {
-                            Text("Экран не найден. Вернитесь в меню.")
-                            Spacer(Modifier.height(8.dp))
-                            Button(onClick = { inner.popBackStack() }) { Text("Назад") }
-                        }
-                    }
-                }
+                composable("unknown") { UnknownRoute(onBack = { inner.popBackStack() }) }
             }
         }
     }
@@ -168,5 +158,19 @@ private fun safeNavigate(controller: NavHostController, route: String) {
         }
     } catch (error: Exception) {
         // маршрут недоступен (например, debug-экран отключён в release) — молча игнорируем
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UnknownRoute(onBack: () -> Unit) {
+    androidx.compose.material3.Scaffold(
+        topBar = { androidx.compose.material3.TopAppBar(title = { Text("Ошибка") }) },
+    ) { pad ->
+        Column(Modifier.padding(pad).fillMaxSize().padding(16.dp)) {
+            Text("Экран не найден. Вернитесь в меню.")
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = onBack) { Text("Назад") }
+        }
     }
 }

@@ -34,6 +34,7 @@ import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.qns.ui.theme.EncryptGreen
 import com.qns.ui.theme.ScamRed
@@ -90,7 +91,6 @@ fun ContactsScreen(onChatClick: (String) -> Unit, vm: ContactsViewModel = hiltVi
                             }
                         },
                         leadingContent = { FurryIcon("contact-${contact.id}", Icons.Filled.PersonSearch, null) },
-                        enabled = !loading,
                         modifier = Modifier.clickable(enabled = !loading) { vm.openChat(contact.id) { chatId -> onChatClick(chatId) } },
                     )
                     HorizontalDivider()
