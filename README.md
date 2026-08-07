@@ -166,3 +166,42 @@ Workflow `.github/workflows/build.yml` запускается для push и pul
 В release запрещены локальные HTTP-профили и debug log viewer; production по умолчанию — `https://mainquantumserver.onrender.com`. В debug beta-тестеру доступен viewer логов с экспортом файла `logcat_<timestamp>.log`. Логи не содержат пароли, токены, приватные ключи или plaintext сообщений. Root admin, verified, beta tester и scam reason проверяются сервером, а не только UI. После logout приложение очищает локальные сообщения и состояние ratchet текущего аккаунта.
 
 Изменения схемы сервера применяются idempotent-миграциями при старте; Room использует миграцию 1→2 для локальной базы.
+
+## Текущий набор проверок
+
+`server/tests/`:
+
+- `crypto.test.ts` — BLAKE3, Argon2id, Ed25519, base64url, UUID v4, constant-time compare.
+- `validation.test.ts` — usernames, password limits, text/pagination bounds.
+- `api.test.ts` — auth/key/chat/admin edge cases: prekey one-time use, low-prekeys, key bundle,
+  root admin protection (demote/delete/revoke-sessions), verified/beta flag toggling,
+  SCAM reason persistence, direct chat uniqueness (включая параллельные запросы).
+
+`app/src/test/`:
+
+- `data/crypto/CryptoProtocolTest.java` — X3DH с OPK и без, Double Ratchet (round-trip,
+  100 сообщений подряд, out-of-order, tampered header, replay не ломает state, неверная
+  подпись signed prekey отклоняется).
+- `data/local/MessageMergeTest.java` — sync не стирает `decryptedCache`, decryption error
+  сохраняется, `isMine` сохраняется при resync.
+
+## Что изменилось в v1.0.2
+
+- **NPE при отправке сообщения** (`ChatViewModel.sendText`): добавлена null-проверка
+  `bundle` и извлечения внутреннего map по ключу `bundle`. Повторный клик на кнопку
+  отправки дедуплицируется по `clientMessageId`.
+- **HTTP 400 в админ-панели** на `isVerified` / `isBetaTester` / `role`: `Map.of(...)`
+  заменён на явный `HashMap`, чтобы поведение сериализации через Retrofit/Gson
+  не зависело от вариативности типов значений.
+- **Furry-тема**: `FurryTheme` переведён на явный `MutableState<Boolean>` для
+  надёжной интеграции Java↔Kotlin; добавлены `FurryAvatar` (аватарка в списке
+  чатов) и замены иконок в Settings/Admin/Contacts/Chat (logout, back, send, lock,
+  search, refresh).
+- **Несколько direct-чатов при быстром клике**: на сервере уже был UNIQUE-индекс
+  по `direct_key`, теперь `handleCreateChat` явно обрабатывает параллельные
+  гонки и возвращает существующий `chatId`. Добавлен серверный тест на 4
+  одновременных POST.
+- **Отправка сообщения сама себе**: `ChatViewModel` игнорирует входящие
+  `message` event-ы, у которых `senderId` совпадает с текущим пользователем.
+  `clientMessageId` сохраняется локально и сопоставляется с серверным `id` при
+  получении `message_sent` — фантомные дубли не создаются.

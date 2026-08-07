@@ -1,23 +1,41 @@
 package com.qns.ui.theme
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Icon
 import com.qns.R
 
 /**
- * Состояние furry-темы. Чтение через snapshot state внутри композиции
- * перекомпоновывает иконки при смене темы (без сетевых загрузок — картинки лежат в drawable).
+ * Состояние furry-темы. Используем явный MutableState<Boolean> — это безопаснее
+ * при обращении из Java (ThemeRepository) и однозначно публикует изменения
+ * в snapshot для Compose.
+ *
+ * Kotlin `var by mutableStateOf(...)` создаёт синтетический сеттер через
+ * рефлексию, который из Java выглядит как `FurryTheme.INSTANCE.setEnabled(...)`
+ * и теоретически может не оповестить snapshot, если вызывается не из
+ * Compose-контекста. Поэтому вынесено в явный объект.
  */
 object FurryTheme {
-    var enabled by mutableStateOf(false)
+    private val state = mutableStateOf(false)
+    val enabled: Boolean get() = state.value
+    fun setEnabled(value: Boolean) { state.value = value }
+    fun isEnabled(): Boolean = state.value
 }
 
 /**
@@ -41,15 +59,59 @@ fun furryRes(seed: String): Int {
  * В обычных темах рисует обычный Material icon.
  */
 @Composable
-fun FurryIcon(seed: String, fallback: ImageVector, contentDescription: String?, modifier: Modifier = Modifier) {
+fun FurryIcon(
+    seed: String,
+    fallback: ImageVector,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+    round: Boolean = false,
+) {
     if (!FurryTheme.enabled) {
         Icon(fallback, contentDescription, modifier = modifier)
         return
     }
+    val finalModifier = if (round) modifier.clip(CircleShape) else modifier
     Image(
         painter = painterResource(furryRes(seed)),
         contentDescription = contentDescription,
-        modifier = modifier,
+        modifier = finalModifier,
+        contentScale = ContentScale.Crop,
+    )
+}
+
+/**
+ * Круглый аватар: в furry-теме — boykisser-картинка, иначе — инициалы на
+ * цветном кружке (используется в списке чатов).
+ */
+@Composable
+fun FurryAvatar(
+    seed: String,
+    initials: String,
+    modifier: Modifier = Modifier,
+) {
+    if (!FurryTheme.enabled) {
+        Surface(
+            modifier = modifier,
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primaryContainer,
+        ) {
+            Box(
+                modifier = Modifier.size(48.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    initials,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+        return
+    }
+    Image(
+        painter = painterResource(furryRes(seed)),
+        contentDescription = null,
+        modifier = modifier.clip(CircleShape),
         contentScale = ContentScale.Crop,
     )
 }

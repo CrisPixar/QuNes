@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.qns.data.local.entity.MessageEntity
 import com.qns.ui.theme.EncryptGreen
+import com.qns.ui.theme.FurryIcon
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -107,9 +108,9 @@ fun ChatScreen(chatId: String, onBack: () -> Unit, vm: ChatViewModel = hiltViewM
                         )
                     }
                 },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } },
+                navigationIcon = { IconButton(onClick = onBack) { FurryIcon("chat-back", Icons.AutoMirrored.Filled.ArrowBack, null) } },
                 actions = {
-                    IconButton(onClick = { showSafety = true }) { Icon(Icons.Filled.Lock, null, tint = EncryptGreen) }
+                    IconButton(onClick = { showSafety = true }) { FurryIcon("chat-lock", Icons.Filled.Lock, null, Modifier) }
                 },
             )
         },
@@ -127,7 +128,7 @@ fun ChatScreen(chatId: String, onBack: () -> Unit, vm: ChatViewModel = hiltViewM
                         vm.sendText(input)
                         input = ""
                     }
-                }) { Icon(Icons.AutoMirrored.Filled.Send, null, tint = MaterialTheme.colorScheme.primary) }
+                }) { FurryIcon("chat-send", Icons.AutoMirrored.Filled.Send, null) }
             }
         },
     ) { padding ->

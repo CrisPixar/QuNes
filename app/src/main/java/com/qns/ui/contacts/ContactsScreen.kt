@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.qns.ui.theme.EncryptGreen
 import com.qns.ui.theme.ScamRed
+import com.qns.ui.theme.FurryIcon
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,7 +56,7 @@ fun ContactsScreen(onChatClick: (String) -> Unit, vm: ContactsViewModel = hiltVi
                 label = { Text("Поиск пользователя") },
                 leadingIcon = { Icon(Icons.Filled.Search, null) },
                 trailingIcon = {
-                    IconButton(onClick = { vm.search(query) }) { Icon(Icons.Filled.PersonSearch, null) }
+                    IconButton(onClick = { vm.search(query) }) { FurryIcon("contacts-search", Icons.Filled.PersonSearch, null) }
                 },
                 singleLine = true,
             )
@@ -88,7 +89,7 @@ fun ContactsScreen(onChatClick: (String) -> Unit, vm: ContactsViewModel = hiltVi
                                 )
                             }
                         },
-                        leadingContent = { Icon(Icons.Filled.PersonSearch, null) },
+                        leadingContent = { FurryIcon("contact-${contact.id}", Icons.Filled.PersonSearch, null) },
                         enabled = !loading,
                         modifier = Modifier.clickable(enabled = !loading) { vm.openChat(contact.id) { chatId -> onChatClick(chatId) } },
                     )

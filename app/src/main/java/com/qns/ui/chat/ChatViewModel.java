@@ -11,7 +11,6 @@ import com.qns.data.crypto.CryptoSessionManager;
 import com.qns.data.local.dao.RatchetSessionDao;
 import com.qns.data.local.entity.ChatEntity;
 import com.qns.data.local.entity.MessageEntity;
-import com.qns.data.local.entity.RatchetSessionEntity;
 import com.qns.data.remote.ApiService;
 import com.qns.data.remote.ServerRepository;
 import com.qns.data.remote.WebSocketClient;
@@ -31,6 +30,7 @@ import javax.inject.Inject;
 
 import dagger.hilt.android.lifecycle.HiltViewModel;
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
+import io.reactivex.rxjava3.core.Single;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 
@@ -47,6 +47,7 @@ public class ChatViewModel extends ViewModel {
     private final CompositeDisposable bag = new CompositeDisposable();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final Set<String> decrypting = new HashSet<>();
+    private final Set<String> sendingMessageIds = new HashSet<>();
 
     public final MutableLiveData<List<MessageEntity>> messages = new MutableLiveData<>();
     public final MutableLiveData<ChatEntity> chat = new MutableLiveData<>();
@@ -104,18 +105,50 @@ public class ChatViewModel extends ViewModel {
 
     public void sendText(String text) {
         if (chatId == null || text == null || text.trim().isEmpty()) return;
+        // Защита от двойной отправки при быстром нажатии на кнопку.
+        if (sendingMessageIds.size() > 0) return;
         String clientMessageId = UUID.randomUUID().toString();
         String cleanText = text.trim();
+        sendingMessageIds.add(clientMessageId);
         bag.add(repository.getChat(chatId)
-            .flatMap(chatEntity -> api.getKeyBundle(servers.current().api("api/keys/bundle/" + chatEntity.otherUserId))
-                .flatMap(bundle -> crypto.encrypt(chatId, chatEntity.otherUserId, cleanText, bundle.get("bundle") instanceof Map ? (Map<String, Object>) bundle.get("bundle") : null)))
+            .flatMap(chatEntity -> {
+                String otherUserId = chatEntity == null ? null : chatEntity.otherUserId;
+                if (otherUserId == null || otherUserId.isEmpty()) {
+                    return Single.<Map<String, Object>>error(new IllegalStateException("Собеседник не определён"));
+                }
+                return api.getKeyBundle(servers.current().api("api/keys/bundle/" + otherUserId))
+                    .map(bundle -> {
+                        if (bundle == null) throw new IllegalStateException("Сервер вернул пустой key bundle");
+                        return bundle;
+                    });
+            })
+            .flatMap(bundle -> {
+                // Безопасное извлечение внутреннего map: bundle может быть null,
+                // либо не содержать ключа "bundle".
+                Map<String, Object> inner = null;
+                if (bundle != null) {
+                    Object raw = bundle.get("bundle");
+                    if (raw instanceof Map) inner = (Map<String, Object>) raw;
+                }
+                if (inner == null) {
+                    return Single.<String>error(new IllegalStateException("Key bundle пустой или невалидный"));
+                }
+                return repository.getChat(chatId).flatMap(chatEntity -> {
+                    String targetUser = chatEntity == null ? "" : chatEntity.otherUserId;
+                    return crypto.encrypt(chatId, targetUser, cleanText, inner);
+                });
+            })
             .subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread())
             .subscribe(envelope -> {
+                sendingMessageIds.remove(clientMessageId);
                 sendUseCase.execute(chatId, clientMessageId, envelope, null, null);
                 bag.add(repository.saveOutgoing(chatId, currentUserId, clientMessageId, envelope, null, null, cleanText, 2)
                     .observeOn(AndroidSchedulers.mainThread()).subscribe(() -> {}, value -> error.setValue(value.getMessage())));
-            }, value -> error.setValue(value.getMessage())));
+            }, value -> {
+                sendingMessageIds.remove(clientMessageId);
+                error.setValue(value.getMessage() == null ? "Не удалось отправить сообщение" : value.getMessage());
+            }));
     }
 
     public void sendEncrypted(String payload, String ratchetHeader, String signature) {
@@ -203,6 +236,7 @@ public class ChatViewModel extends ViewModel {
     @Override protected void onCleared() {
         mainHandler.removeCallbacksAndMessages(null);
         bag.clear();
+        sendingMessageIds.clear();
         super.onCleared();
     }
 }

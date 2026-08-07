@@ -41,6 +41,7 @@ import com.qns.ui.chatlist.ChatListScreen
 import com.qns.ui.contacts.ContactsScreen
 import com.qns.ui.settings.SettingsScreen
 import com.qns.ui.theme.FurryIcon
+import com.qns.ui.theme.FurryAvatar
 
 object Routes {
     const val AUTH = "auth"

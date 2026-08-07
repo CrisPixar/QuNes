@@ -242,4 +242,48 @@ describe("direct chat uniqueness", () => {
     const count = db.query("SELECT COUNT(*) as c FROM chats WHERE direct_key = ?").get([a.id, b.id].sort().join(":")) as any;
     expect(Number(count.c)).toBe(1);
   });
+
+  it("serialises parallel create-chat requests for the same pair", async () => {
+    const a = await createUser("dc_p_a");
+    const b = await createUser("dc_p_b");
+    const token = auth(a.id, a.username);
+    const calls = await Promise.all([
+      handleCreateChat(request("POST", "/api/chats", token, { type: "direct", memberIds: [b.id] })),
+      handleCreateChat(request("POST", "/api/chats", token, { type: "direct", memberIds: [b.id] })),
+      handleCreateChat(request("POST", "/api/chats", token, { type: "direct", memberIds: [b.id] })),
+      handleCreateChat(request("POST", "/api/chats", token, { type: "direct", memberIds: [b.id] })),
+    ]);
+    const bodies = await Promise.all(calls.map((response) => response.json() as any));
+    const ids = new Set(bodies.map((body) => body.chatId));
+    expect(ids.size).toBe(1);
+    const db = getDB();
+    const count = db.query("SELECT COUNT(*) as c FROM chats WHERE direct_key = ?").get([a.id, b.id].sort().join(":")) as any;
+    expect(Number(count.c)).toBe(1);
+  });
+});
+
+describe("admin flag updates", () => {
+  it("accepts isVerified as a JSON boolean", async () => {
+    const caller = await createUser("flagadmin_v", "admin");
+    const target = await createUser("flaguser_v");
+    const token = auth(caller.id, caller.username, "admin");
+    const r1 = await handleAdminUpdateUser(request("PUT", `/api/admin/users/${target.id}`, token, { isVerified: true }), target.id);
+    expect(r1.status).toBe(200);
+    const r2 = await handleAdminUpdateUser(request("PUT", `/api/admin/users/${target.id}`, token, { isVerified: false }), target.id);
+    expect(r2.status).toBe(200);
+    const r3 = await handleAdminUpdateUser(request("PUT", `/api/admin/users/${target.id}`, token, { isBetaTester: true }), target.id);
+    expect(r3.status).toBe(200);
+  });
+
+  it("rejects non-boolean verified flag", async () => {
+    const caller = await createUser("flagadmin_v2", "admin");
+    const target = await createUser("flaguser_v2");
+    const token = auth(caller.id, caller.username, "admin");
+    const r = await handleAdminUpdateUser(request("PUT", `/api/admin/users/${target.id}`, token, { isVerified: "true" }), target.id);
+    expect(r.status).toBe(400);
+    const r2 = await handleAdminUpdateUser(request("PUT", `/api/admin/users/${target.id}`, token, { isVerified: 1 }), target.id);
+    expect(r2.status).toBe(400);
+    const r3 = await handleAdminUpdateUser(request("PUT", `/api/admin/users/${target.id}`, token, { isVerified: null }), target.id);
+    expect(r3.status).toBe(400);
+  });
 });

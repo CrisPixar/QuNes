@@ -64,6 +64,9 @@ export async function handleCreateChat(req: Request): Promise<Response> {
 
   const directKey = body.type === "direct" ? [auth.userId, otherIds[0]].sort().join(":") : null;
   if (directKey) {
+    // Защита от гонок: сначала пытаемся найти существующий direct-чат, и только
+    // если его нет — создаём. INSERT также защищён UNIQUE-индексом по direct_key,
+    // поэтому даже при параллельных запросах получится максимум один чат.
     const existing = db.query("SELECT id FROM chats WHERE direct_key = ?").get(directKey) as any;
     if (existing) return json({ chatId: existing.id, existing: true });
   }
@@ -78,6 +81,7 @@ export async function handleCreateChat(req: Request): Promise<Response> {
     );
   } catch (error) {
     if (directKey) {
+      // Параллельная вставка могла обогнать — берём уже существующий чат.
       const existing = db.query("SELECT id FROM chats WHERE direct_key = ?").get(directKey) as any;
       if (existing) return json({ chatId: existing.id, existing: true });
     }

@@ -49,6 +49,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.qns.ui.server.ServerPicker
 import com.qns.ui.server.ServerViewModel
 import com.qns.ui.theme.EncryptGreen
+import com.qns.ui.theme.FurryIcon
 
 @Composable
 fun AuthScreen(
@@ -78,11 +79,11 @@ fun AuthScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
             ) {
                 Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Filled.Lock, null, Modifier.size(56.dp), tint = MaterialTheme.colorScheme.primary)
+                    FurryIcon("auth-logo", Icons.Filled.Lock, null, Modifier.size(56.dp))
                     Spacer(Modifier.height(10.dp))
                     Text("QNS", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
                     Text("Quantum Secure Messenger", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                    Text("ML-KEM · Double Ratchet", color = EncryptGreen, fontSize = 12.sp)
+                    Text("X3DH + Double Ratchet", color = EncryptGreen, fontSize = 12.sp)
                     Spacer(Modifier.height(22.dp))
                     ServerPicker(serverViewModel)
                     Spacer(Modifier.height(18.dp))

@@ -12,6 +12,7 @@ import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.*; import androidx.compose.ui.unit.*
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.qns.ui.theme.ScamRed; import com.qns.ui.theme.EncryptGreen
+import com.qns.ui.theme.FurryIcon
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,8 +60,8 @@ fun AdminScreen(onBack: () -> Unit, vm: AdminViewModel = hiltViewModel()) {
         topBar = {
             TopAppBar(
                 title = { Text("Admin Panel 🛡️") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } },
-                actions = { IconButton(onClick = { vm.loadData() }) { Icon(Icons.Filled.Refresh, null) } },
+                navigationIcon = { IconButton(onClick = onBack) { FurryIcon("admin-back", Icons.AutoMirrored.Filled.ArrowBack, null) } },
+                actions = { IconButton(onClick = { vm.loadData() }) { FurryIcon("admin-refresh", Icons.Filled.Refresh, null) } },
             )
         }
     ) { pad ->

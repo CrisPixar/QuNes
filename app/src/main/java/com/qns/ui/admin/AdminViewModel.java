@@ -88,9 +88,12 @@ public class AdminViewModel extends ViewModel {
     }
 
     public void toggleScam(String id, boolean scam, String reason) {
+        java.util.HashMap<String, Object> body = new java.util.HashMap<>();
+        body.put("isScam", scam);
+        body.put("reason", reason == null ? "" : reason);
         bag.add(api.setScam(
                 servers.current().api("api/admin/users/" + id + "/scam"),
-                Map.of("isScam", scam, "reason", reason == null ? "" : reason)
+                body
             )
             .subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread())
@@ -106,15 +109,19 @@ public class AdminViewModel extends ViewModel {
     }
 
     private void updateFlag(String id, String key, boolean enabled) {
-        bag.add(api.updateAdminUser(servers.current().api("api/admin/users/" + id), Map.of(key, enabled))
+        java.util.HashMap<String, Object> body = new java.util.HashMap<>();
+        body.put(key, enabled);
+        bag.add(api.updateAdminUser(servers.current().api("api/admin/users/" + id), body)
             .subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread())
             .subscribe(ignored -> loadData(), errorValue -> error.setValue(message(errorValue))));
     }
 
     public void setAdmin(String id, boolean admin) {
+        java.util.HashMap<String, Object> body = new java.util.HashMap<>();
+        body.put("role", admin ? "admin" : "user");
         bag.add(api.updateAdminUser(
                 servers.current().api("api/admin/users/" + id),
-                Map.of("role", admin ? "admin" : "user")
+                body
             )
             .subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread())

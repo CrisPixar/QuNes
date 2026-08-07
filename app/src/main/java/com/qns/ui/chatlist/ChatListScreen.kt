@@ -11,6 +11,7 @@ import androidx.compose.ui.*; import androidx.compose.ui.graphics.Color; import 
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.qns.data.local.entity.ChatEntity
 import com.qns.ui.theme.EncryptGreen; import com.qns.ui.theme.ScamRed
+import com.qns.ui.theme.FurryAvatar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,9 +60,11 @@ private fun ChatListItem(chat: ChatEntity, onClick: (String) -> Unit) {
         },
         leadingContent = {
             Box {
-                Surface(Modifier.size(48.dp), shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primaryContainer) {
-                    Box(contentAlignment = Alignment.Center) { Text(name.first().uppercase(), fontSize = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) }
-                }
+                FurryAvatar(
+                    seed = "chat-${chat.id}",
+                    initials = name.first().uppercase(),
+                    modifier = Modifier.size(48.dp),
+                )
                 if (chat.otherUserOnline)
                     Surface(Modifier.size(12.dp).align(Alignment.BottomEnd), shape = MaterialTheme.shapes.small, color = Color(0xFF4CAF50)) {}
             }

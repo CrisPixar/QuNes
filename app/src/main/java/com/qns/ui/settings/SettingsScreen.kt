@@ -48,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.qns.data.remote.model.SessionInfo
+import com.qns.ui.theme.FurryIcon
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -111,7 +112,7 @@ fun SettingsScreen(
                         contentColor = MaterialTheme.colorScheme.onErrorContainer,
                     ),
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Logout, null)
+                    FurryIcon(seed = "settings-logout", fallback = Icons.AutoMirrored.Filled.Logout, contentDescription = null)
                     Spacer(Modifier.size(8.dp))
                     Text("Выйти")
                 }
@@ -125,8 +126,8 @@ private fun SettingsItem(icon: androidx.compose.ui.graphics.vector.ImageVector, 
     ListItem(
         headlineContent = { Text(title) },
         supportingContent = { Text(subtitle) },
-        leadingContent = { Icon(icon, null) },
-        trailingContent = { Icon(Icons.Filled.ChevronRight, null) },
+        leadingContent = { FurryIcon(seed = "settings-$title", fallback = icon, contentDescription = null) },
+        trailingContent = { FurryIcon(seed = "settings-chevron-$title", fallback = Icons.Filled.ChevronRight, contentDescription = null) },
         modifier = Modifier.clickable(onClick = onClick),
     )
     HorizontalDivider()
