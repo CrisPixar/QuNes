@@ -17,6 +17,7 @@ import javax.inject.Singleton;
 
 import dagger.hilt.android.qualifiers.ApplicationContext;
 import io.reactivex.rxjava3.core.Completable;
+import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Single;
 
 /**
@@ -45,6 +46,11 @@ public final class PrefsStore {
 
     public RxDataStore<Preferences> data() {
         return dataStore;
+    }
+
+    /** Реактивный поток preferences — обёртка над RxDataStore.data() для удобного вызова .map/.filter. */
+    public Flowable<Preferences> flow() {
+        return dataStore.data();
     }
 
     public Single<Preferences> first() {

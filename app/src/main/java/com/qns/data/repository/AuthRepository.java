@@ -102,21 +102,21 @@ public class AuthRepository {
     }
 
     public Flowable<Boolean> observeLoggedIn() {
-        return prefs.data().map(preferences -> {
+        return prefs.flow().map(preferences -> {
             String token = preferences.get(PreferencesKeys.stringKey(Constants.PREF_ACCESS_TOKEN));
             return token != null && !token.isEmpty();
         });
     }
 
     public Flowable<String> observeRole() {
-        return prefs.data().map(preferences -> {
+        return prefs.flow().map(preferences -> {
             String role = preferences.get(PreferencesKeys.stringKey(Constants.PREF_USER_ROLE));
             return role == null ? "user" : role;
         });
     }
 
     public Flowable<Boolean> observeBetaTester() {
-        return prefs.data().map(preferences -> Boolean.TRUE.equals(preferences.get(PreferencesKeys.booleanKey(Constants.PREF_BETA_TESTER))));
+        return prefs.flow().map(preferences -> Boolean.TRUE.equals(preferences.get(PreferencesKeys.booleanKey(Constants.PREF_BETA_TESTER))));
     }
 
     public Single<String> getAccessToken() {
