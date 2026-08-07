@@ -38,7 +38,7 @@ public class DoubleRatchet {
     private byte[] dhRecvPub;
     private int sendN = 0, recvN = 0, prevN = 0;
     private final Map<String, byte[]> skippedKeys = new HashMap<>();
-    private static final SecureRandom RNG = new SecureRandom();
+    private final SecureRandom rng = new SecureRandom();
 
     // ---- Инициализация Alice (отправитель первого сообщения) ----
 
@@ -166,7 +166,7 @@ public class DoubleRatchet {
 
     private byte[] aeadEncrypt(byte[] mk, byte[] plain, byte[] ad) throws Exception {
         byte[] encKey = Arrays.copyOf(mk, 32);
-        byte[] iv     = new byte[CryptoConstants.AES_GCM_NONCE_SIZE]; RNG.nextBytes(iv);
+        byte[] iv     = new byte[CryptoConstants.AES_GCM_NONCE_SIZE]; rng.nextBytes(iv);
         Cipher c = Cipher.getInstance(CryptoConstants.AES_GCM);
         c.init(Cipher.ENCRYPT_MODE, new javax.crypto.spec.SecretKeySpec(encKey,"AES"),
                new GCMParameterSpec(CryptoConstants.AES_GCM_TAG_SIZE, iv));
@@ -203,7 +203,8 @@ public class DoubleRatchet {
 
     private static AsymmetricCipherKeyPair genDHPair() {
         X25519KeyPairGenerator g = new X25519KeyPairGenerator();
-        g.init(new KeyGenerationParameters(RNG, 255)); return g.generateKeyPair();
+        // BC 1.68+ поддерживает генерацию без RNG: используем внутренний детерминированный seed через SecureRandom на стороне.
+        g.init(new KeyGenerationParameters(new SecureRandom(), 255)); return g.generateKeyPair();
     }
 
     private static byte[] hmac256(byte[] key, byte[] data) {
