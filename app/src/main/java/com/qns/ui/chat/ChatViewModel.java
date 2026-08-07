@@ -125,11 +125,7 @@ public class ChatViewModel extends ViewModel {
             .flatMap(bundle -> {
                 // Безопасное извлечение внутреннего map: bundle может быть null,
                 // либо не содержать ключа "bundle".
-                Map<String, Object> inner = null;
-                if (bundle != null) {
-                    Object raw = bundle.get("bundle");
-                    if (raw instanceof Map) inner = (Map<String, Object>) raw;
-                }
+                Map<String, Object> inner = extractInnerBundle(bundle);
                 if (inner == null) {
                     return Single.<String>error(new IllegalStateException("Key bundle пустой или невалидный"));
                 }
@@ -228,6 +224,14 @@ public class ChatViewModel extends ViewModel {
 
     private static String string(Map<String, Object> map, String key) { Object value = map.get(key); return value == null ? "" : String.valueOf(value); }
     private static long number(Map<String, Object> map, String key, long fallback) { Object value = map.get(key); return value instanceof Number ? ((Number) value).longValue() : fallback; }
+
+    /** Достаёт внутренний key-bundle из ответа /api/keys/bundle/:id, безопасно для null. */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> extractInnerBundle(Map<String, Object> bundle) {
+        if (bundle == null) return null;
+        Object raw = bundle.get("bundle");
+        return raw instanceof Map ? (Map<String, Object>) raw : null;
+    }
 
     private static boolean isTransientDecryptError(String error) {
         return error == null || error.isEmpty() || "WAITING_FOR_SESSION".equals(error);
