@@ -81,7 +81,7 @@ public class KeyManager {
                 Security.addProvider(new BouncyCastleProvider());
             }
         } catch (Throwable t) {
-            Log.w(TAG, "Failed to register BouncyCastleProvider: " + t.getMessage());
+            safeLog("Failed to register BouncyCastleProvider: " + t.getMessage());
         }
 
         try {
@@ -89,7 +89,15 @@ public class KeyManager {
                 Security.addProvider(new BouncyCastlePQCProvider());
             }
         } catch (Throwable t) {
-            Log.w(TAG, "Failed to register BCPQC provider: " + t.getMessage());
+            safeLog("Failed to register BCPQC provider: " + t.getMessage());
+        }
+    }
+
+    private static void safeLog(String message) {
+        try {
+            Log.w(TAG, message);
+        } catch (Throwable ignored) {
+            System.err.println("[" + TAG + "] " + message);
         }
     }
 
@@ -101,7 +109,7 @@ public class KeyManager {
         } catch (Throwable e) {
             isKeystoreAvailable = false;
             keyStore = null;
-            Log.w(TAG, "AndroidKeyStore initialization unavailable; fallback enabled");
+            safeLog("AndroidKeyStore initialization unavailable; fallback enabled");
         }
     }
 
@@ -133,7 +141,7 @@ public class KeyManager {
                 kg.init(spec);
                 return kg.generateKey();
             } catch (Throwable t) {
-                Log.w(TAG, "Keystore generation failed for alias; using safe fallback", t);
+                safeLog("Keystore generation failed for alias; using safe fallback: " + t.getMessage());
             }
         }
 
@@ -152,7 +160,7 @@ public class KeyManager {
         String encoded = prefs.getString(prefKey, null);
         if (encoded != null && !encoded.trim().isEmpty()) {
             try {
-                byte[] raw = Base64.decode(encoded, Base64.NO_WRAP);
+                byte[] raw = fromBase64Url(encoded);
                 if (raw != null && raw.length == 32) {
                     return new SecretKeySpec(raw, "AES");
                 }
@@ -162,7 +170,7 @@ public class KeyManager {
         byte[] raw = new byte[32];
         random.nextBytes(raw);
         SecretKey key = new SecretKeySpec(raw, "AES");
-        prefs.edit().putString(prefKey, Base64.encodeToString(raw, Base64.NO_WRAP)).apply();
+        prefs.edit().putString(prefKey, toBase64Url(raw)).apply();
         return key;
     }
 
@@ -285,11 +293,15 @@ public class KeyManager {
 
     public static String toBase64Url(byte[] b) {
         if (b == null) return "";
-        return Base64.encodeToString(b, Base64.NO_WRAP | Base64.URL_SAFE | Base64.NO_PADDING);
+        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(b);
     }
 
     public static byte[] fromBase64Url(String s) {
         if (s == null || s.trim().isEmpty()) return new byte[0];
-        return Base64.decode(s.trim(), Base64.URL_SAFE | Base64.NO_PADDING);
+        try {
+            return java.util.Base64.getUrlDecoder().decode(s.trim());
+        } catch (Throwable e) {
+            return Base64.decode(s.trim(), Base64.URL_SAFE | Base64.NO_PADDING);
+        }
     }
 }
