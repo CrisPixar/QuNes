@@ -47,10 +47,12 @@ public final class IdentityStore {
     private static final int OPK_COUNT = 100;
     private static final SecureRandom RANDOM = new SecureRandom();
     private final SharedPreferences preferences;
+    private final KeyManager keyManager;
 
     @Inject
-    public IdentityStore(@ApplicationContext Context context) {
+    public IdentityStore(@ApplicationContext Context context, KeyManager keyManager) {
         preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        this.keyManager = keyManager;
     }
 
     public synchronized DeviceKeys getDeviceKeys() {
@@ -184,6 +186,11 @@ public final class IdentityStore {
                 if (value.optInt("version", 0) == 2) return DeviceKeys.fromJson(value);
                 if (value.has("private") && value.has("public")) return migrateLegacy(value);
             }
+        } catch (Throwable recoveryErr) {
+            android.util.Log.w("QNS_IdentityStore", "Failed to decrypt existing device keys, generating fresh identity", recoveryErr);
+        }
+
+        try {
             DeviceKeys keys = create();
             save(keys);
             return keys;
@@ -279,33 +286,14 @@ public final class IdentityStore {
     private static void wipe(byte[]... values) { for (byte[] value : values) if (value != null) java.util.Arrays.fill(value, (byte) 0); }
     private static int compare(byte[] a, byte[] b) { for (int i = 0; i < Math.min(a.length, b.length); i++) { int result = Byte.compare(a[i], b[i]); if (result != 0) return result; } return Integer.compare(a.length, b.length); }
 
-    private SecretKey sealKey() throws Exception {
-        KeyStore store = KeyStore.getInstance("AndroidKeyStore");
-        store.load(null);
-        if (store.containsAlias(SEAL_ALIAS)) return (SecretKey) store.getKey(SEAL_ALIAS, null);
-        KeyGenerator generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
-        generator.init(new KeyGenParameterSpec.Builder(SEAL_ALIAS, KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
-            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-            .setKeySize(256).build());
-        return generator.generateKey();
-    }
-
     private byte[] seal(byte[] plain) throws Exception {
-        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.ENCRYPT_MODE, sealKey());
-        byte[] iv = cipher.getIV();
-        byte[] encrypted = cipher.doFinal(plain);
-        return ByteBuffer.allocate(iv.length + encrypted.length).put(iv).put(encrypted).array();
+        SecretKey master = keyManager.getOrCreateMasterKey(SEAL_ALIAS);
+        return keyManager.sealData(master, plain);
     }
 
     private byte[] unseal(byte[] value) throws Exception {
-        if (value.length < 13) throw new IllegalArgumentException("Invalid identity data");
-        byte[] iv = java.util.Arrays.copyOf(value, 12);
-        byte[] encrypted = java.util.Arrays.copyOfRange(value, 12, value.length);
-        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.DECRYPT_MODE, sealKey(), new GCMParameterSpec(128, iv));
-        return cipher.doFinal(encrypted);
+        SecretKey master = keyManager.getOrCreateMasterKey(SEAL_ALIAS);
+        return keyManager.unsealData(master, value);
     }
 
     public static final class PreKey {

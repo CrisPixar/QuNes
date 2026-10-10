@@ -13,3 +13,9 @@ local.properties
 
 # IDE
 .idea/ *.iml .DS_Store
+
+# Secrets and API tokens
+GitHubapi.txt
+Githubapi.txt
+*api*.txt
+*.secret

@@ -152,18 +152,33 @@ public final class CryptoSessionManager {
         byte[] identityX25519, identityEd25519, signedPrekey, signedPrekeySignature, oneTimePrekey;
         String signedPrekeyId, oneTimePrekeyId;
 
-        static DeviceBundle from(Map<String, Object> bundle) {
-            DeviceBundle result = new DeviceBundle();
+        static DeviceBundle from(Map<String, Object> bundle) throws CryptoException {
+            if (bundle == null) throw new CryptoException("KEY_MISSING", "Отсутствуют криптографические ключи собеседника");
             Map<?, ?> identityX = map(bundle.get("identity_x25519"));
             Map<?, ?> identityEd = map(bundle.get("identity_ed25519"));
             Map<?, ?> signed = map(bundle.get("signed_prekey"));
             Map<?, ?> oneTime = map(bundle.get("one_time_prekey"));
+
+            if (identityX == null || identityEd == null || signed == null) {
+                throw new CryptoException("KEY_MISSING", "Неполный комплект ключей собеседника");
+            }
+
+            DeviceBundle result = new DeviceBundle();
             result.identityX25519 = decode(String.valueOf(identityX.get("publicKey")));
             result.identityEd25519 = decode(String.valueOf(identityEd.get("publicKey")));
             result.signedPrekey = decode(String.valueOf(signed.get("publicKey")));
             result.signedPrekeySignature = decode(String.valueOf(signed.get("signature")));
             result.signedPrekeyId = String.valueOf(signed.get("id"));
-            if (oneTime != null) { result.oneTimePrekey = decode(String.valueOf(oneTime.get("publicKey"))); result.oneTimePrekeyId = String.valueOf(oneTime.get("id")); }
+
+            if (result.identityX25519 == null || result.identityEd25519 == null ||
+                result.signedPrekey == null || result.signedPrekeySignature == null) {
+                throw new CryptoException("KEY_MALFORMED", "Некорректный формат ключей собеседника");
+            }
+
+            if (oneTime != null && oneTime.get("publicKey") != null) {
+                result.oneTimePrekey = decode(String.valueOf(oneTime.get("publicKey")));
+                result.oneTimePrekeyId = String.valueOf(oneTime.get("id"));
+            }
             return result;
         }
 

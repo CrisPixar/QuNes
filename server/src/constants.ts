@@ -10,9 +10,9 @@ export const JWT_SECRET_SEED = (process.env.JWT_SECRET_SEED ?? "").trim().toLowe
 export const JWT_ACCESS_EXPIRY_SEC = 15 * 60;
 export const JWT_REFRESH_EXPIRY_SEC = 30 * 24 * 60 * 60;
 
-export const ARGON2_MEMORY_COST = 65536;
-export const ARGON2_TIME_COST = 3;
-export const ARGON2_PARALLELISM = 4;
+export const ARGON2_MEMORY_COST = numberFromEnv("ARGON2_MEMORY_COST", 65536, 1024);
+export const ARGON2_TIME_COST = numberFromEnv("ARGON2_TIME_COST", 3, 1);
+export const ARGON2_PARALLELISM = numberFromEnv("ARGON2_PARALLELISM", 4, 1);
 export const ARGON2_HASH_LENGTH = 32;
 
 export const PREKEYS_INITIAL_COUNT = 100;

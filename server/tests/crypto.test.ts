@@ -1,3 +1,4 @@
+import "./helpers/setup.js";
 import { describe, it, expect } from "bun:test";
 import {
   hash, hashHex, hashPassword, verifyPassword, constantTimeEqual,
